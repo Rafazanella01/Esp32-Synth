@@ -18,213 +18,17 @@ arpejo, repetindo em loop até você apertar de novo (toggle) ou trocar de nota.
   legenda de ajuda (página 2), navegável pelo eixo Y do joystick
 - Botão do joystick = "pânico" (silencia tudo na hora)
 
-## Peças usadas (o que você já tem)
+## Documentação
 
-| Peça | Função no projeto |
+| Doc | Conteúdo |
 |---|---|
-| ESP32 DevKit | cérebro do sintetizador |
-| Módulo GY-PCM5102 (PCM5102A) | DAC de áudio, via **I2S** |
-| Matriz de botões 4x4 (8 pinos: R1-R4, C1-C4) | seleção de nota + tipo de acorde |
-| Display LCD 16x2 com backpack I2C (4 pinos) | mostra nota/acorde/timbre/BPM |
-| Joystick analógico (VRx, VRy, SW) | pitch-bend, navegação de página, pânico |
-| Potenciômetros 10K | andamento (BPM), timbre, e volume analógico |
-| LM358 (dual op-amp) | buffer de saída de áudio antes do jack P10 |
-| Capacitores | acoplamento AC / desacoplamento de alimentação |
-| Transistor NPN (genérico, ex. BC547/2N2222) | *opcional*: estágio de corrente extra se quiser tocar direto num alto-falante pequeno |
-| Jack P10 | saída de áudio para caixa/amplificador/fone |
-
-> Não tenho como saber o valor exato dos seus resistores/capacitores porque
-> você não especificou os modelos — os valores abaixo são os padrões de
-> qualquer kit de eletrônica básico. Se algo não bater com o que você tem,
-> me fala que eu ajusto.
-
-## Mapa de pinos (ESP32 DevKit genérico)
-
-### I2S — PCM5102A (áudio)
-| PCM5102A | ESP32 |
-|---|---|
-| BCK | GPIO27 |
-| LRCK/WS | GPIO25 |
-| DIN | GPIO26 |
-| SCK | GND |
-| FMT | GND |
-| **XSMT** | **3.3V** (crítico: sem isso o módulo fica mudo) |
-| VIN | 3.3V |
-| GND | GND |
-
-### I2C — Display LCD 16x2
-| LCD backpack | ESP32 |
-|---|---|
-| SDA | GPIO21 |
-| SCL | GPIO22 |
-| VCC | 5V (a maioria dos backpacks I2C de LCD pede 5V pro contraste/backlight funcionar direito) |
-| GND | GND |
-
-Endereço I2C padrão assumido: `0x27`. Se o seu backpack for `0x3F`, troque em
-`include/Config.h` (`LCD_I2C_ADDR`). Se não souber, rode um "I2C scanner" (tem
-vários exemplos prontos) pra descobrir.
-
-### Matriz de botões 4x4
-| Matriz | ESP32 |
-|---|---|
-| R1 | GPIO13 |
-| R2 | GPIO14 |
-| R3 | GPIO16 |
-| R4 | GPIO17 |
-| C1 | GPIO18 |
-| C2 | GPIO19 |
-| C3 | GPIO23 |
-| C4 | GPIO5 |
-
-Layout físico sugerido (anote/serigrafe nas teclas):
-
-```
-[ C  ] [ C# ] [ D  ] [ D# ]
-[ E  ] [ F  ] [ F# ] [ G  ]
-[ G# ] [ A  ] [ A# ] [ B  ]
-[MAJ ] [MIN ] [MIN7] [AUG ]
-```
-
-As 12 primeiras teclas tocam/param o acorde com aquela nota como fundamental
-(aperta de novo na mesma nota = para). A última linha troca o tipo de acorde
-a qualquer momento, mesmo com o arpejo já tocando.
-
-> **Nota sobre GPIO5**: é um pino de "strapping" do ESP32 (usado na
-> inicialização do boot). Como ele fica como entrada com pull-up e só é
-> puxado pra GND se alguém apertar aquele botão específico, na prática só dá
-> problema se você estiver segurando exatamente essa tecla no instante em que
-> liga a placa. Se algum dia isso causar boot estranho, troque C4 para outro
-> GPIO livre (ex: GPIO15).
-
-### Joystick analógico
-| Joystick | ESP32 |
-|---|---|
-| VRx | GPIO34 |
-| VRy | GPIO35 |
-| SW | GPIO4 |
-| VCC | 3.3V |
-| GND | GND |
-
-### Potenciômetros
-| Função | ESP32 |
-|---|---|
-| Andamento (BPM) | GPIO32 |
-| Timbre | GPIO33 |
-| *(livres p/ expansão futura, ex: decay)* | GPIO36 (VP), GPIO39 (VN) |
-
-O **terceiro potenciômetro** (volume) eu sugiro deixar **fora do firmware**:
-ligue ele como divisor de tensão passivo direto no caminho de áudio, depois
-do estágio de buffer (ver seção abaixo), com o wiper indo pro jack P10. É mais
-simples, não consome pino nenhum e funciona mesmo com o ESP32 desligado do
-áudio.
-
-## Estágio de saída de áudio (LM358 + jack P10)
-
-O PCM5102A já entrega um sinal de linha, mas um buffer com o LM358 ajuda a
-tocar em fone/caixa sem carregar a saída do DAC, e permite meter um
-potenciômetro de volume sem perder qualidade. Circuito de buffer unitário
-(um dos dois amp-ops do LM358 — o outro fica livre para uma segunda saída
-estéreo, se quiser expandir depois):
-
-```
-      3V3
-       |
-      R1 (10k)
-       |
-       +------------------+--------- IN+ (pino 3 do LM358)
-       |                  |
-      R2 (10k)          C_bias (10uF p/ GND)
-       |                  |
-      GND                GND
-
-  PCM5102A (LOUT) --[C_in 1uF]--> (mesmo nó do IN+, soma o sinal AC sobre o bias)
-
-  IN- (pino 2) ------ ligado direto no OUT (pino 1)   <- buffer unitário (voltage follower)
-
-  OUT (pino 1) --[C_out 10uF]--> potenciômetro de volume (10K) --> jack P10 (tip)
-                                                                 jack P10 (sleeve) -> GND
-
-  V+ (pino 8) -> 3V3 (ou 5V, se preferir mais headroom)
-  V- (pino 4) -> GND
-  C_desacoplamento 100nF entre pino 8 e GND, perto do LM358
-```
-
-- `R1`/`R2` só precisam ser parecidos entre si (qualquer valor entre 4.7k e
-  47k funciona) — eles criam o "meio da alimentação" pro op-amp trabalhar em
-  fonte única.
-- O potenciômetro de volume: ponta e ponta ligadas no sinal e no GND, o
-  **wiper** vai pro jack.
-- Se quiser tocar direto num alto-falante pequeno (sem amplificador
-  externo), aí sim vale usar o transistor NPN como estágio seguidor de
-  emissor depois do buffer — mas para fone de ouvido ou caixa amplificada
-  isso não é necessário.
-- O segundo jack P10 que você tem pode ficar de reserva (2ª saída, usando o
-  outro op-amp do LM358) ou para uma futura entrada de áudio externa — isso
-  não está implementado no firmware ainda porque exigiria um estágio de
-  atenuação/bias separado no ADC do ESP32. Se quiser isso no futuro, me avisa.
-
-## Ordem de montagem (bring-up incremental)
-
-Não monte tudo de uma vez. Vá subsistema por subsistema: monta, grava o
-teste daquele subsistema, confirma que funciona, só então parte pro
-próximo. Assim, se algo falhar, você sabe exatamente onde procurar.
-
-Cada teste é um "ambiente" separado do PlatformIO (não mexe no firmware
-principal). No VSCode com a extensão PlatformIO: aba do formigueiro (PIO) na
-lateral > `Project Tasks` > escolha o ambiente (`test_i2s`, `test_lcd` etc.)
-> `Upload`. Ou pelo terminal:
-
-```bash
-pio run -e test_i2s -t upload
-pio run -e test_lcd -t upload
-pio run -e test_keypad -t upload
-pio run -e test_joystick -t upload
-pio device monitor          # abre o Serial Monitor pra ver os testes com print
-```
-
-**Passo 0 — ESP32 sozinho.** Antes de ligar qualquer módulo, plugue só o
-ESP32 no USB e confirme no computador que ele aparece como porta serial
-(no PlatformIO: `pio device list`). Se não aparecer, é driver USB
-(CP2102/CH340) faltando — resolve isso antes de continuar.
-
-**Passo 1 — Áudio (PCM5102A).** Ligue *só* o módulo PCM5102A conforme a
-tabela de I2S acima (não esqueça o XSMT em 3.3V!). Grave `test_i2s`. Deve
-sair um tom de 440Hz contínuo e limpo no jack. Sem chiado, sem silêncio. Só
-depois disso funcionar direito, prossiga.
-
-**Passo 2 — Display (LCD I2C).** Ligue o LCD (SDA/SCL/VCC/GND). Grave
-`test_lcd` e abra o Serial Monitor: ele escaneia o barramento I2C e mostra
-o endereço encontrado — confirme que bate com `LCD_I2C_ADDR` em
-`include/Config.h` (padrão `0x27`; se o scan achar `0x3F`, troque lá). O
-LCD deve mostrar "LCD OK!" e um contador incrementando.
-
-**Passo 3 — Matriz de botões.** Ligue as 8 linhas/colunas da matriz. Grave
-`test_keypad`, abra o Serial Monitor e aperte as 16 teclas uma por uma,
-conferindo se o nome impresso bate com a tecla física apertada. Se alguma
-tecla não responder ou responder com o nome errado, o problema está na
-linha/coluna dela especificamente — mais fácil de achar testando isolado
-assim.
-
-**Passo 4 — Joystick + potenciômetros.** Ligue o joystick e os dois
-potenciômetros (tempo/timbre). Grave `test_joystick` e observe os números no
-Serial Monitor enquanto mexe em cada controle — devem variar suavemente
-entre ~0 e ~4095, e o centro do joystick deve ficar perto de ~2048.
-
-**Passo 5 — Firmware completo.** Com os 4 passos acima validados, grave o
-ambiente principal (`pio run -e esp32dev -t upload`, ou apenas
-`pio run -t upload`). Agora sim toque nas teclas e confira o sintetizador
-funcionando de ponta a ponta.
-
-**Passo 6 — Estágio analógico de saída (LM358).** Por último, monte o
-buffer com o LM358 e o potenciômetro de volume (circuito acima) entre a
-saída do PCM5102A e o jack P10. Deixe esse por último porque é a parte mais
-fácil de errar (polaridade de capacitor eletrolítico, pinagem do LM358) — e
-com o Passo 1 já validado, você sabe que se o som sumir depois de montar o
-buffer, o problema está no buffer, não no resto.
-
-> Dica geral: tenha um multímetro por perto. Antes de plugar qualquer
-> módulo novo, meça se o pino de alimentação dele está mesmo recebendo
-> 3.3V (ou 5V, conforme o módulo) e não algo diferente por engano de fiação.
+| [`docs/01-ideia.md`](docs/01-ideia.md) | A ideia original do projeto e as decisões tomadas pra chegar no design atual |
+| [`docs/02-arquitetura.md`](docs/02-arquitetura.md) | Como hardware e firmware se encaixam, e por quê |
+| [`docs/03-hardware.md`](docs/03-hardware.md) | Lista de peças, mapa completo de pinos, circuito de saída de áudio (LM358) |
+| [`docs/04-firmware.md`](docs/04-firmware.md) | Referência da API de cada módulo do firmware |
+| [`docs/05-montagem.md`](docs/05-montagem.md) | Guia de montagem passo a passo (bring-up incremental) |
+| [`docs/06-boas-praticas.md`](docs/06-boas-praticas.md) | Convenções do projeto — como estender sem quebrar o que já existe |
+| [`CHANGELOG.md`](CHANGELOG.md) | Histórico do que foi feito, sessão a sessão |
 
 ## Build
 
@@ -234,32 +38,32 @@ VSCode, ou o CLI). Não precisa de Arduino IDE.
 ```bash
 pio run              # compila
 pio run -t upload    # grava no ESP32 (conecte via USB)
-pio device monitor    # monitor serial, se precisar debugar
+pio device monitor   # monitor serial, se precisar debugar
 ```
 
 Se der erro de biblioteca faltando, confirme que `platformio.ini` baixou a
 `LiquidCrystal_I2C`. Se o `board = esp32dev` não for a sua placa exata (ex:
 você tem uma S3), troque essa linha e recompile.
 
+Antes de gravar o firmware completo pela primeira vez, veja o
+[guia de montagem](docs/05-montagem.md) — ele testa cada módulo de
+hardware isoladamente primeiro, o que economiza muito tempo de debug.
+
 ## Estrutura do código
 
 ```
-include/
-  Config.h     - todos os pinos e constantes de tuning num lugar só
-  Chords.h     - tabela de intervalos dos acordes
-  Waveforms.h  - wavetables dos timbres
-  Keypad.h     - scanner da matriz 4x4
-  Input.h      - joystick + potenciômetros
-  Display.h    - LCD I2C
-  Synth.h      - motor de áudio I2S + arpejador
-src/
-  *.cpp             - implementação de cada módulo acima
-  main.cpp          - loop principal do firmware completo (ambiente esp32dev)
-  bringup_i2s.cpp      - teste isolado do PCM5102A (ambiente test_i2s)
-  bringup_lcd.cpp      - teste isolado do LCD I2C (ambiente test_lcd)
-  bringup_keypad.cpp   - teste isolado da matriz 4x4 (ambiente test_keypad)
-  bringup_joystick.cpp - teste isolado do joystick/pots (ambiente test_joystick)
+include/   - interface pública de cada módulo (Config, Chords, Waveforms,
+             Keypad, Input, Display, Synth)
+src/       - implementação de cada módulo + os "mains":
+             main.cpp             - firmware completo (ambiente esp32dev)
+             bringup_i2s.cpp      - teste isolado do PCM5102A (test_i2s)
+             bringup_lcd.cpp      - teste isolado do LCD I2C (test_lcd)
+             bringup_keypad.cpp   - teste isolado da matriz 4x4 (test_keypad)
+             bringup_joystick.cpp - teste isolado do joystick/pots (test_joystick)
+docs/      - documentação detalhada (ver tabela acima)
 ```
+
+Mais detalhes de cada módulo em [`docs/04-firmware.md`](docs/04-firmware.md).
 
 ## Próximos passos possíveis
 

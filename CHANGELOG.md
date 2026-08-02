@@ -22,6 +22,10 @@ Atualizado a cada sessão de trabalho — ver
 - **Passo 1 do guia de montagem (PCM5102A / I2S) confirmado funcionando em
   hardware real** — áudio audível através do jack, testado no
   ambiente `test_i2s`
+- **Passo 2 do guia de montagem (LCD I2C) confirmado funcionando em
+  hardware real** — endereço `0x27` encontrado no scan (bate com o padrão
+  já configurado em `Config.h`), display exibindo texto corretamente,
+  testado no ambiente `test_lcd`
 
 ## [0.2.0] - 2026-07-29
 

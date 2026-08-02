@@ -51,7 +51,7 @@ endereço real encontrado.
 | Matriz | ESP32 | Rótulo na placa (DevKit 30 pinos) |
 |---|---|---|
 | R1 | GPIO13 | D13 |
-| R2 | GPIO14 | D12 |
+| R2 | GPIO14 | D14 |
 | R3 | GPIO18 | D18 |
 | R4 | GPIO19 | D19 |
 | C1 | GPIO23 | D23 |

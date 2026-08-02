@@ -85,13 +85,15 @@ void loop() {
     synthSetGlideMs(getGlideMs());
     synthSetArpGate(getArpGate());
 
-    // O joystick manda na qualidade do acorde nos DOIS modos, ao vivo. A
-    // unica diferenca e o que o centro significa em cada um:
-    //   segurando -> centro = nota pura sustentada
-    //   no arranjo -> centro = acorde maior (arpejando)
-    if (touchMode == TouchMode::HOLDING && isJoystickCentered()) {
-        synthSetChordType(ChordType::NATURAL);
+    // Segurar vs tocar rapido NAO muda o acorde - muda o jeito de tocar:
+    // segurando o acorde fica em bloco (sustentado), no tap ele arpeja.
+    // O joystick manda na qualidade do acorde ao vivo nos dois modos; a
+    // unica diferenca e o centro, que ao segurar vira a nota pura.
+    if (touchMode == TouchMode::HOLDING) {
+        synthSetPlayMode(PlayMode::SUSTAINED);
+        synthSetChordType(isJoystickCentered() ? ChordType::NATURAL : getJoystickChordType());
     } else {
+        synthSetPlayMode(PlayMode::ARPEGGIO);
         synthSetChordType(getJoystickChordType());
     }
 

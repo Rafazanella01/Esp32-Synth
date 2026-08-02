@@ -29,8 +29,8 @@ tocar e o que mostrar, e sai por dois barramentos diferentes: **I2S** pro
                           v                 v
                     +----------------------------+
                     |           Synth            |  <-- estado central:
-                    |  (acorde atual, arpejo,     |      raiz, tipo de acorde,
-                    |   timbre, I2S)              |      timbre, BPM, pitch-bend
+                    |  (vozes, acorde, modo de    |      raiz, acorde, modo
+                    |   toque, timbre, I2S)       |      (bloco/arpejo), timbre, BPM
                     +--------------+-------------+
                                    |
                        +-----------+-----------+
@@ -66,9 +66,23 @@ precisar de RTOS tasks separadas. É a abordagem mais simples que ainda dá
 áudio sem estalos — sacrifica um pouco de "capacidade de resposta" das
 outras tarefas em troca de simplicidade de código.
 
-**Arpejador como modo principal (não acorde em bloco).** Ver
-[`01-ideia.md`](01-ideia.md) — foi a leitura mais direta do pedido de
-"ficar repetindo, fazer arranjos como sintetizador".
+**Dois modos de toque sobre o mesmo acorde.** Segurar toca o acorde em
+bloco (todas as notas juntas, sustentadas); tocar rápido arpeja. O acorde
+em si vem do joystick e é independente do modo — ver
+[`01-ideia.md`](01-ideia.md).
+
+**Vozes independentes (polifonia interna).** Pro acorde em bloco existir, o
+motor mantém uma voz por nota do acorde (`MAX_CHORD_NOTES`), cada uma com
+seu próprio acumulador de fase e sua própria frequência com glide. A soma
+é dividida pelo número de vozes ativas pra não estourar o `int16`. No modo
+arpejo só a voz 0 é usada — as notas do acorde se revezam nela.
+
+**Suavização exponencial (EMA) em tudo que é contínuo.** O mesmo truque
+aparece em três lugares: no glide de afinação, no morph de timbre e no
+filtro das leituras de ADC. Em vez de saltar pro valor novo, o valor atual
+anda uma fração do caminho a cada passo. É barato, não precisa de buffer,
+e resolve dois problemas de uma vez — transição fluida e imunidade ao
+tremor natural da leitura analógica.
 
 **Módulos separados por responsabilidade física, não por camada
 abstrata.** `Keypad`, `Input`, `Display`, `Synth` correspondem 1:1 a
@@ -83,8 +97,15 @@ arquivo, não caçar números espalhados pelo código.
 
 ## Fluxo de uma jogada de tecla
 
-1. `keypadPoll()` varre a matriz e detecta uma tecla nova pressionada (com debounce)
-2. `main.cpp` decide: tecla 0-11 = nota → `synthTriggerRoot()`; tecla 12-15 = tipo de acorde → `synthSetChordType()`
-3. `synthTriggerRoot()` faz *toggle*: se já está tocando a mesma raiz, para; senão, troca o acorde e zera o passo do arpejo
-4. No próximo `synthProcess()`, o motor de áudio recalcula a frequência do passo atual do arpejo e começa a gerar as amostras daquele acorde
-5. `main.cpp` monta um `SynthStatus` com o estado atual (`synthIsPlaying()`, `synthCurrentRoot()` etc.) e passa pro `displayUpdate()`, que só redesenha o LCD se algo mudou desde a última vez
+Como não dá pra saber se é toque rápido ou "segurar" no instante em que a
+tecla desce, o firmware **sempre começa no modo sustentado** e só decide
+quando a tecla sobe:
+
+1. `keypadUpdate()` varre a matriz; `keypadJustPressed()` reporta a tecla que desceu (com debounce)
+2. `main.cpp` chama `synthNoteOn()`, entra em `TouchMode::HOLDING` e guarda o instante do toque
+3. Enquanto segura: modo `SUSTAINED`, e o acorde vem do joystick (centro = nota pura)
+4. `keypadJustReleased()` reporta a tecla que subiu. `main.cpp` compara o tempo segurado com `TAP_THRESHOLD_MS` (250ms):
+   - **abaixo** → foi um toque: passa pra `TouchMode::ARPEGGIO`, o som continua sozinho
+   - **acima** → foi um segurar: `synthNoteOff()`, o som para com um release curto
+5. `synthProcess()` gera as amostras: em `SUSTAINED` soma todas as vozes do acorde; em `ARPEGGIO` cicla uma nota por passo, no tempo do BPM
+6. `main.cpp` monta um `SynthStatus` e passa pro `displayUpdate()`, que só redesenha o LCD se algo mudou desde a última vez

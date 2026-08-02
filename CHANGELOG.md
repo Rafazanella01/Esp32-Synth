@@ -6,6 +6,39 @@ Atualizado a cada sessão de trabalho — ver
 
 ## [Não lançado]
 
+### Alterado — redesenho do toque
+- **As 16 teclas da matriz agora são notas** (C4 a D#5). O tipo de acorde
+  saiu da matriz e foi pro joystick, o que liberou as 4 teclas que antes
+  eram MAJ/MIN/MIN7/AUG
+- **Segurar vs tocar rápido mudou de significado**: não muda mais o
+  acorde, muda o *jeito de tocar* — segurando o acorde soa em bloco
+  sustentado, no toque rápido ele arpeja e continua sozinho
+- **Joystick com 10 posições** (centro, 8 direções com diagonais, e o
+  clique), detectadas por ângulo em vez de comparar os eixos — é o que
+  faz as diagonais existirem de verdade
+- Qualidades de acorde passaram de 4 pra 11: somaram-se Dominante7, Sus2,
+  Sus4, Diminuto e Sexta
+
+### Adicionado
+- **Polifonia interna**: o motor ganhou vozes independentes pra tocar as
+  notas do acorde ao mesmo tempo — antes só sabia tocar uma de cada vez,
+  então acorde em bloco não existia
+- **Transições fluidas**: glide (portamento) entre notas e morph contínuo
+  entre as formas de onda, no lugar da troca em degrau
+- Calibração do centro do joystick no boot, com cada eixo normalizado
+  pelo seu próprio curso (o ADC do ESP32 comprime a leitura perto de
+  3.3V, o que deixava uma direção bem menos sensível que a oposta)
+- Potenciômetros opcionais de glide e de gate do arpejo, protegidos por
+  flag em `Config.h`
+
+### Corrigido
+- **Rótulo do R2 da matriz**: o firmware aciona GPIO14, que nesta placa é
+  serigrafado `D14` — a documentação dizia `D12`. Era o motivo das teclas
+  E, F e F# nunca responderem
+- Pinos de ADC não ligados eram lidos como se fossem controles válidos;
+  como um pino solto flutua, o gate do arpejo caía sozinho e o som
+  picotava até quase sumir
+
 ### Adicionado
 - Documentação completa em `docs/`: ideia original, arquitetura, hardware,
   referência de firmware, guia de montagem e boas práticas

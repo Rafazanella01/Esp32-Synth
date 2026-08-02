@@ -3,20 +3,29 @@
 Sintetizador de acordes com arpejador, baseado em ESP32 + saída de áudio I2S
 (PCM5102A) + display LCD + matriz de botões + joystick + potenciômetros.
 
-Você aperta uma tecla de **nota** (fundamental) e o acorde correspondente ao
-**tipo** selecionado (Maior / Menor / Menor7 / Aumentado) começa a tocar em
-arpejo, repetindo em loop até você apertar de novo (toggle) ou trocar de nota.
+As 16 teclas da matriz são notas (C4 a D#5). **Segurar** uma tecla toca o
+acorde em bloco, sustentado; **tocar rápido** dispara o arpejo, que
+continua sozinho. O **joystick** escolhe qual acorde, ao vivo — dá pra
+mexer nele com o som já rolando.
+
+| | Joystick no centro | Joystick numa direção |
+|---|---|---|
+| **Segurando a tecla** | nota pura, sustentada | aquele acorde em bloco |
+| **Toque rápido** | acorde Maior arpejado | aquele acorde arpejado |
 
 ## O que o firmware faz
 
-- 4 tipos de acorde: Maior, Menor, Menor com sétima (m7), Aumentado
-- Arpejador contínuo (fica repetindo/"arranjando" o acorde, como um sintetizador de verdade)
-- 4 timbres selecionáveis por potenciômetro: Seno, Triangular, Dente-de-serra, Quadrada
-- Pitch-bend ao vivo pelo eixo X do joystick
+- 10 qualidades de acorde nas posições do joystick — centro, as 8 direções
+  (com diagonais) e o clique: Maior, Maior7, Dominante7, Aumentado, Sus4,
+  Menor7, Menor, Diminuto, Sus2 e Sexta
+- Dois modos de toque sobre o mesmo acorde: bloco sustentado ou arpejado
+- 4 formas de onda com **morph contínuo** entre elas (seno, triangular,
+  dente-de-serra, quadrada), num potenciômetro
+- **Glide** (portamento) entre as notas, pra transição fluida
 - Controle de andamento (BPM) por potenciômetro
-- Display LCD 16x2 mostrando nota/acorde/timbre/BPM (página 1) e uma
-  legenda de ajuda (página 2), navegável pelo eixo Y do joystick
-- Botão do joystick = "pânico" (silencia tudo na hora)
+- Potenciômetros opcionais pra quantidade de glide e pro gate do arpejo
+  (staccato ↔ legato)
+- Display LCD 16x2 mostrando nota, acorde, timbre e BPM
 
 ## Documentação
 
@@ -65,10 +74,22 @@ docs/      - documentação detalhada (ver tabela acima)
 
 Mais detalhes de cada módulo em [`docs/04-firmware.md`](docs/04-firmware.md).
 
+## Estado da montagem
+
+| Subsistema | Estado |
+|---|---|
+| Áudio (PCM5102A / I2S) | validado em hardware ✅ |
+| Display (LCD I2C, `0x27`) | validado em hardware ✅ |
+| Matriz 4x4 | 13 de 16 teclas validadas — a linha 2 estava ligada em D12, o correto é **D14** |
+| Joystick | ainda não confirmado |
+| Potes de tempo e timbre | leitura presa nos extremos — falta ligar as 3 pernas |
+| Potes de glide e gate | não ligados (desativados por flag em `Config.h`) |
+| Estágio LM358 + jack P10 | não montado — hoje o som sai pelo P2 do módulo |
+
 ## Próximos passos possíveis
 
 - Envelope ADSR completo (hoje é só attack/release curtos por passo do arpejo)
 - Salvar o último timbre/BPM na EEPROM/NVS
 - Usar o 2º op-amp do LM358 pra uma saída estéreo de verdade (hoje é mono duplicado)
 - Entrada de áudio externa pelo 2º jack P10 (efeito tipo looper/delay)
-- Segundo modo de toque: acorde em bloco (todas as notas juntas) em vez de arpejo
+- Polifonia entre teclas diferentes (hoje o acorde soa junto, mas de uma tecla por vez)

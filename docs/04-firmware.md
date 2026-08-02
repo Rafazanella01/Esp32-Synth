@@ -8,22 +8,30 @@ subsistema fica isolada no módulo dele.
 
 Não tem `.cpp` — é só constantes (`static const`). **Fonte única de
 verdade** para todo número de GPIO, endereço I2C, tamanho de buffer e
-constante de tuning (BPM, sample rate, debounce). Ver
+constante de tuning (BPM, glide, gate, debounce). Ver
 [`03-hardware.md`](03-hardware.md) pra tabela completa de pinos.
 
 Ao adicionar um novo pino ou constante de tuning ao projeto, ele entra
 aqui — nunca como número mágico direto em outro arquivo.
 
+Duas flags importantes: `POT_GLIDE_CONNECTED` e `POT_ARP_GATE_CONNECTED`.
+Elas existem porque um pino de ADC sem nada ligado **flutua** — vire pra
+`true` só depois de ligar o potenciômetro de verdade.
+
 ## `Chords.h`
 
 Puramente dados, header-only (sem `.cpp`).
 
-- `enum class ChordType { MAJOR, MINOR, MINOR7, AUGMENTED }`
+- `enum class ChordType` — 11 valores: `NATURAL` (nota pura, sem
+  empilhar nada) mais as 10 qualidades selecionáveis pelo joystick
+  (`MAJOR`, `MAJOR7`, `DOMINANT7`, `AUGMENTED`, `SUS4`, `MINOR7`,
+  `MINOR`, `DIMINISHED`, `SUS2`, `SIXTH`)
 - `ChordDef` — nome + intervalos em semitons a partir da fundamental
 - `chordDef(ChordType)` — retorna a definição
-- `NOTE_NAMES[12]` — nomes das notas na ordem das teclas 0-11
+- `NOTE_NAMES[16]` — nomes das notas na ordem das teclas 0-15 (C4 a D#5)
 - `noteFrequency(noteIndex, baseC4)` — calcula Hz a partir do índice
-  cromático (0=C, 11=B) relativo à oitava de `BASE_FREQ_C4`
+  cromático relativo a `BASE_FREQ_C4`. O índice cresce livremente, então
+  valores acima de 11 caem naturalmente na oitava seguinte
 
 ## `Waveforms.h` / `Waveforms.cpp`
 
@@ -33,43 +41,59 @@ Puramente dados, header-only (sem `.cpp`).
 - `waveTables[timbre][amostra]` — acesso direto às tabelas (usado pelo
   `Synth` no hot path de áudio, por isso é array global e não função)
 - `waveformName(Waveform)` — nome curto pro LCD
-- `nextWaveform(Waveform)` — próximo timbre com wrap-around
 
 ## `Keypad.h` / `Keypad.cpp`
 
-Scanner da matriz 4x4, sem biblioteca externa.
+Scanner da matriz 4x4, sem biblioteca externa. Reporta **descida e
+subida** de tecla separadamente — é isso que permite o `main.cpp`
+distinguir toque rápido de segurar.
 
 - `keypadInit()` — configura linhas como `OUTPUT` (idle HIGH) e colunas
   como `INPUT_PULLUP`
-- `keypadPoll()` — varre a matriz inteira, com debounce por tecla
-  (`DEBOUNCE_MS` em `Config.h`). Retorna o índice (0-15) da tecla que
-  **acabou de ser pressionada** neste ciclo (borda de subida), ou `-1`
-
-Chamar `keypadPoll()` a cada iteração do `loop()`. Só reporta 1 tecla nova
-por chamada — suficiente para toque sequencial, não faz *n-key rollover*.
+- `keypadUpdate()` — varre a matriz inteira com debounce por tecla
+  (`DEBOUNCE_MS`). Chamar a cada iteração do `loop()`
+- `keypadJustPressed()` — índice (0-15) da tecla que acabou de descer,
+  ou `-1`. Só reporta uma vez por toque
+- `keypadJustReleased()` — idem, pra tecla que acabou de subir
 
 ## `Input.h` / `Input.cpp`
 
 Leitura de joystick e potenciômetros, com polling limitado por tempo
 (`ADC_POLL_MS`) pra não gastar ciclo de CPU lendo ADC a toda hora.
 
-- `inputInit()` — configura resolução do ADC (12 bits) e pull-up do botão
+- `inputInit()` — configura resolução do ADC (12 bits), atenuação dos
+  eixos do joystick, pull-up do botão, e **calibra o centro do joystick**
+  (o joystick precisa estar em repouso quando a placa liga)
 - `inputUpdate()` — lê pots/joystick se já passou `ADC_POLL_MS` desde a
   última leitura; senão não faz nada (chamar toda iteração do `loop()`,
   o próprio módulo decide quando de fato ler o hardware)
 - `getTempoBPM()` — BPM mapeado de `ARP_BPM_MIN` a `ARP_BPM_MAX`
-- `getSelectedTimbre()` — timbre mapeado a partir do pote de timbre
-- `getPitchBendSemitones()` — -1..+1 semitom a partir do eixo X do
-  joystick, com *deadzone* central (`JOY_DEADZONE`)
-- `consumeDisplayPageGesture()` — gesto do eixo Y (-1/0/+1), **edge-
-  triggered**: só reporta 1 vez por vez que o stick sai do centro, evita
-  ficar avançando página em rajada enquanto o stick fica deslocado
-- `consumePanicPress()` — `true` uma única vez no instante em que o botão
-  do joystick foi pressionado (debounced)
+- `getTimbrePosition()` — posição **contínua** entre timbres,
+  `0..(Waveform::COUNT - 1)`. Fracionário é válido: a mistura entre as
+  duas wavetables vizinhas acontece no motor de áudio
+- `getGlideMs()`, `getArpGate()` — valores dos pots opcionais (ou o
+  padrão fixo, se as flags de `Config.h` estiverem em `false`)
+- `getJoystickChordType()` — qualidade do acorde pela posição atual do
+  joystick. No centro retorna `MAJOR`
+- `isJoystickCentered()` — `true` com o joystick parado e sem clique.
+  Serve pra quem chama decidir o que "centro" significa: ao segurar a
+  tecla vira nota pura, no arpejo vira acorde maior
 
-O padrão "consume" (zera o estado pendente ao ser lido) é usado pra
-eventos que devem disparar exatamente uma vez, ao contrário dos getters de
-valor contínuo (`getTempoBPM` etc.) que sempre retornam o estado atual.
+### Como as 8 direções são detectadas
+
+Duas coisas fazem isso funcionar num joystick barato ligado no ADC do
+ESP32:
+
+1. **Centro calibrado no boot.** O repouso quase nunca é o meio da escala
+   — nesta placa lê ~3020 em X e ~3150 em Y, não 2048
+2. **Cada lado normalizado pelo seu próprio curso** (`normalizeAxis`). O
+   ADC do ESP32 comprime a leitura perto de 3.3V, então o curso "pra cima"
+   tem muito menos contagens que o "pra baixo". Sem isso, uma direção
+   responde bem e a oposta quase não responde
+
+Com os dois eixos já normalizados em -1..+1, a direção sai do **ângulo**
+(`atan2`) dividido em 8 setores de 45°, e não de comparar `dx` com `dy` —
+é isso que faz as diagonais existirem de verdade.
 
 ## `Display.h` / `Display.cpp`
 
@@ -78,8 +102,6 @@ Wrapper do LCD 16x2 I2C (biblioteca `LiquidCrystal_I2C`).
 - `struct SynthStatus` — snapshot do que mostrar: `playing`, `rootNote`,
   `chordType`, `timbre`, `bpm`
 - `displayInit()` — inicializa `Wire` e o LCD, mostra tela de boas-vindas
-- `displaySetPage(delta)` — troca de página (-1/0/+1). Página 0 = status,
-  página 1 = ajuda (legenda das teclas)
 - `displayUpdate(status)` — só reescreve o LCD se algo relevante mudou
   desde a última chamada (evita tráfego I2C e flicker desnecessário)
 
@@ -93,27 +115,48 @@ O motor de áudio. Dono de todo o estado do que está tocando.
   no I2S (bloqueante). **Chamar toda iteração do `loop()`** — é essa
   chamada que mantém o som contínuo e também pauta o ritmo do loop
   principal (ver [`02-arquitetura.md`](02-arquitetura.md))
-- `synthTriggerRoot(rootNote)` — inicia o arpejo naquela nota, ou para se
-  já for a nota tocando (toggle)
-- `synthSetChordType(type)` — troca o tipo de acorde com o som já rolando
-- `synthSetTimbre(Waveform)`, `synthSetTempoBPM(bpm)`,
-  `synthSetPitchBendSemitones(semis)` — parâmetros ao vivo
-- `synthStop()` — silencia
+- `synthNoteOn(rootNote)` / `synthNoteOff()` — liga a nota (com rampa de
+  ataque) e inicia o release
+- `synthSetPlayMode(PlayMode)` — `SUSTAINED` (acorde em bloco) ou
+  `ARPEGGIO`. Pode trocar com o som já rolando, sem cortar
+- `synthSetChordType(ChordType)` — idem, troca ao vivo
+- `synthSetTimbrePosition(float)`, `synthSetTempoBPM(int)`,
+  `synthSetGlideMs(float)`, `synthSetArpGate(float)` — parâmetros ao vivo
 - `synthIsPlaying()`, `synthCurrentRoot()`, `synthCurrentChordType()` —
   getters, usados pelo `main.cpp` pra montar o `SynthStatus` do display
 
-### Como o arpejo funciona internamente
+### Vozes
 
-Cada "passo" do arpejo dura `samplesPerStep` amostras (derivado do BPM).
-Dentro do passo, a nota soa por `ARP_GATE` (75%) do tempo, com uma
-rampa curta de ataque/release pra evitar estalo, e fica em silêncio no
-resto — isso dá o "groove" percussivo característico de arpejador. Ao
-fim do passo, avança pro próximo tom do acorde (`arpStep % numNotes`) e
-recalcula a frequência (aplicando o pitch-bend atual).
+O motor mantém `MAX_CHORD_NOTES` vozes, cada uma com seu acumulador de
+fase e sua frequência própria (com glide independente):
+
+- **`SUSTAINED`**: uma voz por nota do acorde, todas soando ao mesmo
+  tempo. A soma é dividida pelo número de vozes ativas pra não estourar o
+  `int16`, e as fases entram espalhadas — se todas começassem em zero, os
+  picos somariam de uma vez e o acorde estouraria no primeiro ciclo
+- **`ARPEGGIO`**: só a voz 0 é usada; as notas do acorde se revezam nela,
+  uma por passo
+
+`refreshVoices()` recalcula esse arranjo sempre que o acorde ou o modo
+muda. Voz que acabou de entrar começa já afinada, sem glide a partir de
+valor velho.
+
+### Envelopes
+
+Dois envelopes independentes se multiplicam:
+
+- **`noteGain`** — envelope geral da nota: rampa de ataque ao ligar,
+  release ao soltar. É ele que evita estalo no início e no fim
+- **`stepGateEnvelope()`** — só no modo arpejo: dentro de cada passo a
+  nota soa por uma fração (`currentArpGate`) e cala no resto, com
+  ataque/release curtinhos. É o que dá o "groove" percussivo do
+  arpejador, e o que o pote de gate controla entre staccato e legato
 
 ## `main.cpp`
 
-Não tem lógica própria além de: inicializar tudo, e a cada `loop()`
-chamar `synthProcess()`, ler as entradas, mandar as mudanças pro `Synth`,
-e atualizar o `Display` com o estado atual do `Synth`. Ver o diagrama de
-fluxo em [`02-arquitetura.md`](02-arquitetura.md#fluxo-de-uma-jogada-de-tecla).
+Não tem lógica de áudio própria — decide apenas *o que* tocar, a partir
+das entradas, e passa pro `Synth`. A parte não-óbvia é a máquina de
+estado de toque (`TouchMode`), que resolve o problema de não dar pra
+saber se é toque ou segurar no instante em que a tecla desce. Ver o fluxo
+passo a passo em
+[`02-arquitetura.md`](02-arquitetura.md#fluxo-de-uma-jogada-de-tecla).

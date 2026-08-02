@@ -42,10 +42,34 @@ distorcidos. Aqui está como cada ambiguidade foi resolvida, e por quê:
 |---|---|---|
 | "i dois c" | Podia ser I2C ou I2S. Acabou sendo **os dois**: I2S pro DAC PCM5102A, I2C pro LCD | O inventário de peças confirmou o LCD com backpack I2C (4 pinos) |
 | "entrada p dez" | Inicialmente lido como pinos numéricos; depois esclarecido como **matriz 4x4** de botões | O usuário confirmou diretamente ao ser perguntado |
-| Quantidade de tipos de acorde | 4 tipos: Maior, Menor, Menor7, Aumentado | O usuário corrigiu explicitamente removendo "sustenido" como tipo |
-| Layout da matriz 4x4 (16 teclas) | 12 teclas = nota fundamental (cromática, uma oitava) + 4 teclas = tipo de acorde | Encaixa exatamente nos 16 botões disponíveis e cobre os 4 tipos pedidos |
-| "queria que ficasse repetindo" | Modo principal de toque é **arpejo contínuo** (não acorde em bloco estático) | É a leitura mais direta de "fazer arranjos como sintetizador" — o recurso clássico de arpejador |
-| "mais timbres... bem versátil" | 4 formas de onda selecionáveis (seno, triangular, dente-de-serra, quadrada) + joystick pra pitch-bend/navegação + potenciômetros pra tempo/timbre | Sem instrução exata de quais controles fazem o quê, essa foi a distribuição que melhor aproveita as peças que o usuário já tem |
+| Quantidade de tipos de acorde | Hoje são 11 qualidades (ver tabela abaixo) | Começou com 4, mas o joystick tem 10 posições úteis — usar só 4 desperdiçaria o controle |
+| Layout da matriz 4x4 (16 teclas) | **As 16 teclas são notas** (C4 a D#5) | O tipo de acorde migrou pro joystick, o que liberou as 4 teclas que antes eram MAJ/MIN/MIN7/AUG |
+| "queria que ficasse repetindo" | Arpejo é um dos dois modos de toque, não o único | Ver a seção "Como o toque funciona" abaixo |
+| "mais timbres... bem versátil" | 4 formas de onda com **morph contínuo** entre elas (não troca em degrau) + glide entre notas | O usuário pediu explicitamente transições fluidas em tudo |
+
+## Como o toque funciona (o desenho central)
+
+Esta é a decisão mais importante do projeto, e chegou depois de algumas
+voltas: **segurar e tocar rápido não mudam o acorde, mudam o jeito de
+tocar.**
+
+| | Joystick no centro | Joystick numa direção |
+|---|---|---|
+| **Segurando a tecla** | nota pura, sustentada | aquele acorde **em bloco**, sustentado |
+| **Toque rápido** | acorde Maior **arpejado** | aquele acorde **arpejado** |
+
+O joystick escolhe *qual* acorde nos dois modos, ao vivo — dá pra mexer
+nele com a nota já soando. As 10 posições:
+
+| Posição | Acorde | Posição | Acorde |
+|---|---|---|---|
+| centro | Maior | baixo (S) | Menor7 |
+| cima (N) | Maior7 | baixo-esquerda (SW) | Menor |
+| cima-direita (NE) | Dominante7 | esquerda (W) | Diminuto |
+| direita (E) | Aumentado | cima-esquerda (NW) | Sus2 |
+| baixo-direita (SE) | Sus4 | clique | Sexta |
+
+Tocar de novo a tecla que está arpejando desliga o som.
 
 Essas decisões estão implementadas no firmware atual, mas **não são
 definitivas** — qualquer uma pode ser revista se não bater com o que o
@@ -54,10 +78,10 @@ para como propor mudanças de forma organizada.
 
 ## Escopo consciente deixado de fora (por enquanto)
 
-- Acorde em bloco (todas as notas soando juntas, sem arpejo) como modo
-  alternativo — hoje só existe o modo arpejado
 - Entrada de áudio externa pelo 2º jack P10 (para plugar um instrumento e
   processar o sinal) — mencionado na ideia original, mas exigiria um
   estágio de condicionamento de sinal (atenuação + bias) que não foi
   detalhado ainda
 - Salvar configurações (último timbre, BPM) entre reinicializações
+- Polifonia entre teclas diferentes — o acorde sustentado já toca várias
+  notas juntas, mas só de uma tecla por vez

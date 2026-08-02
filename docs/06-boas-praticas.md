@@ -27,13 +27,13 @@ podem ficar só no header quando não há estado para inicializar.
 - **Constantes de tuning** (BPM, sample rate, debounce, tamanhos de
   buffer): também centralizadas em `Config.h`, em MAIÚSCULAS
 - **Funções públicas de módulo**: prefixadas com o nome do módulo em
-  minúsculo — `synthTriggerRoot`, `keypadPoll`, `displayUpdate` — pra
+  minúsculo — `synthNoteOn`, `keypadUpdate`, `displayUpdate` — pra
   ficar óbvio de qual módulo é cada função ao ler `main.cpp`
-- **Getters de estado contínuo** (`getTempoBPM`) vs. **eventos de
-  disparo único** (`consumePanicPress`, que zera o pendente ao ser lido):
-  o prefixo `consume` marca explicitamente esse segundo comportamento,
-  porque é fácil de usar errado (chamar duas vezes esperando o mesmo
-  resultado)
+- **Getters de estado contínuo** (`getTempoBPM`, `getJoystickChordType`)
+  vs. **eventos de disparo único** (`keypadJustPressed`, que zera o
+  pendente ao ser lido): o `Just` no nome marca esse segundo
+  comportamento, porque é fácil de usar errado — chamar duas vezes no
+  mesmo ciclo esperando o mesmo resultado devolve `-1` na segunda
 
 ## Ambientes PlatformIO
 

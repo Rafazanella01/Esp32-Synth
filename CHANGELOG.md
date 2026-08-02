@@ -10,9 +10,18 @@ Atualizado a cada sessão de trabalho — ver
 - Documentação completa em `docs/`: ideia original, arquitetura, hardware,
   referência de firmware, guia de montagem e boas práticas
 - Este `CHANGELOG.md`
+- `.gitignore` (gerado pelo PlatformIO ao abrir o projeto)
 
 ### Alterado
 - `README.md` reduzido a um índice enxuto, com detalhes movidos pra `docs/`
+- `bringup_i2s.cpp` toca a abertura de "Ode à Alegria" em loop em vez de um
+  tom fixo de 440Hz — mais fácil de confirmar por ouvido que o áudio
+  funciona de verdade
+
+### Validado
+- **Passo 1 do guia de montagem (PCM5102A / I2S) confirmado funcionando em
+  hardware real** — áudio audível através do jack, testado no
+  ambiente `test_i2s`
 
 ## [0.2.0] - 2026-07-29
 

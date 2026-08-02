@@ -48,16 +48,20 @@ Endereço I2C padrão assumido: `0x27`. Se o backpack for `0x3F`, trocar em
 endereço real encontrado.
 
 ### Matriz de botões 4x4
-| Matriz | ESP32 |
-|---|---|
-| R1 | GPIO13 |
-| R2 | GPIO14 |
-| R3 | GPIO16 |
-| R4 | GPIO17 |
-| C1 | GPIO18 |
-| C2 | GPIO19 |
-| C3 | GPIO23 |
-| C4 | GPIO5 |
+| Matriz | ESP32 | Rótulo na placa (DevKit 30 pinos) |
+|---|---|---|
+| R1 | GPIO13 | D13 |
+| R2 | GPIO14 | D12 |
+| R3 | GPIO18 | D18 |
+| R4 | GPIO19 | D19 |
+| C1 | GPIO23 | D23 |
+| C2 | GPIO16 | RX2 |
+| C3 | GPIO17 | TX2 |
+| C4 | GPIO2 | D2 |
+
+> Nessa placa específica, GPIO16/17 aparecem serigrafados como `RX2`/`TX2`
+> (são os pinos default da UART2), mas como o projeto não usa UART2, estão
+> livres pra usar como GPIO normal.
 
 Layout físico sugerido (anotar/serigrafar nas teclas):
 
@@ -72,12 +76,12 @@ As 12 primeiras teclas tocam/param o acorde com aquela nota como fundamental
 (apertar de novo na mesma nota = parar). A última linha troca o tipo de
 acorde a qualquer momento, mesmo com o arpejo já tocando.
 
-> **Nota sobre GPIO5**: é um pino de "strapping" do ESP32 (usado na
+> **Nota sobre GPIO2**: é um pino de "strapping" do ESP32 (usado na
 > inicialização do boot). Como ele fica como entrada com pull-up e só é
 > puxado pra GND se alguém apertar aquele botão específico, na prática só dá
 > problema se estiver segurando exatamente essa tecla no instante em que a
 > placa liga. Se algum dia isso causar boot estranho, trocar C4 para outro
-> GPIO livre (ex: GPIO15).
+> GPIO livre.
 
 ### Joystick analógico
 | Joystick | ESP32 |
@@ -151,11 +155,13 @@ estéreo, se quiser expandir depois):
 
 | Pino | Uso |
 |---|---|
+| GPIO2 | Matriz C4 |
 | GPIO4 | Joystick SW |
-| GPIO5 | Matriz C4 |
-| GPIO13, 14, 16, 17 | Matriz R1-R4 |
-| GPIO18, 19, 23 | Matriz C1-C3 |
+| GPIO13, 14 | Matriz R1, R2 |
+| GPIO16, 17 | Matriz C2, C3 |
+| GPIO18, 19 | Matriz R3, R4 |
 | GPIO21, 22 | I2C (LCD) |
+| GPIO23 | Matriz C1 |
 | GPIO25, 26, 27 | I2S (PCM5102A) |
 | GPIO32, 33 | Potenciômetros (tempo, timbre) |
 | GPIO34, 35 | Joystick VRx, VRy |

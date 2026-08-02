@@ -32,8 +32,11 @@ static const uint8_t LCD_ROWS = 2;
 // Matriz de botoes 4x4 (modulo com 8 saidas: R1-R4, C1-C4)
 // -----------------------------------------------------------------------------
 // Linhas = saidas do ESP32 (uma por vez em LOW) | Colunas = entradas c/ pull-up interno
-static const int ROW_PINS[4] = {13, 14, 16, 17}; // -> R1 R2 R3 R4 do modulo
-static const int COL_PINS[4] = {18, 19, 23, 5};  // -> C1 C2 C3 C4 do modulo
+// Pinos conferidos contra o pinout real da placa (DevKit 30 pinos): D16/D17
+// nessa placa aparecem serigrafados como RX2/TX2, mas sao os mesmos GPIOs
+// (16/17) e estao livres, ja que UART2 nao e usado neste projeto.
+static const int ROW_PINS[4] = {13, 14, 18, 19};   // -> R1 R2 R3 R4 do modulo
+static const int COL_PINS[4] = {23, 16, 17, 2};    // -> C1 C2 C3 C4 do modulo (16=RX2, 17=TX2)
 
 // Layout fisico sugerido (serigrafar/anotar nas teclas):
 //   Linha 1:  C    C#   D    D#

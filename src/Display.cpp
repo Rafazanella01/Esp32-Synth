@@ -4,9 +4,8 @@
 #include <LiquidCrystal_I2C.h>
 
 static LiquidCrystal_I2C lcd(LCD_I2C_ADDR, LCD_COLS, LCD_ROWS);
-static uint8_t currentPage = 0;
 static bool firstDraw = true;
-static SynthStatus lastDrawn = {false, 255, ChordType::MAJOR, Waveform::SINE, -1};
+static SynthStatus lastDrawn = {false, 255, ChordType::NATURAL, Waveform::SINE, -1};
 
 void displayInit() {
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL);
@@ -19,40 +18,6 @@ void displayInit() {
     lcd.print("iniciando...");
 }
 
-static void drawStatusPage(const SynthStatus &s) {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    if (s.playing) {
-        lcd.print(NOTE_NAMES[s.rootNote]);
-        lcd.print(" ");
-        lcd.print(chordDef(s.chordType).name);
-    } else {
-        lcd.print("-- silencio --");
-    }
-    lcd.setCursor(0, 1);
-    lcd.print(waveformName(s.timbre));
-    lcd.print(" ");
-    lcd.print(s.bpm);
-    lcd.print("bpm");
-}
-
-static void drawHelpPage() {
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print("L4:Mai Men m7 Aum");
-    lcd.setCursor(0, 1);
-    lcd.print("Joy SW=stop Y=pag");
-}
-
-void displaySetPage(int8_t delta) {
-    if (delta == 0) return;
-    int8_t p = (int8_t)currentPage + delta;
-    if (p < 0) p = 1;
-    if (p > 1) p = 0;
-    currentPage = (uint8_t)p;
-    firstDraw = true; // forca redesenho na proxima displayUpdate()
-}
-
 void displayUpdate(const SynthStatus &status) {
     bool changed = firstDraw ||
                    status.playing != lastDrawn.playing ||
@@ -63,11 +28,20 @@ void displayUpdate(const SynthStatus &status) {
 
     if (!changed) return;
 
-    if (currentPage == 0) {
-        drawStatusPage(status);
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    if (status.playing) {
+        lcd.print(NOTE_NAMES[status.rootNote]);
+        lcd.print(" ");
+        lcd.print(chordDef(status.chordType).name);
     } else {
-        drawHelpPage();
+        lcd.print("ESP32 Synth");
     }
+    lcd.setCursor(0, 1);
+    lcd.print(waveformName(status.timbre));
+    lcd.print(" ");
+    lcd.print(status.bpm);
+    lcd.print("bpm");
 
     lastDrawn = status;
     firstDraw = false;

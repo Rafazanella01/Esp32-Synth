@@ -1,22 +1,36 @@
 #pragma once
 #include <Arduino.h>
 #include "Waveforms.h"
+#include "Chords.h"
 
-// Le potenciometros (tempo/timbre) e joystick (pitch-bend, navegacao, panico).
+// Le potenciometros (tempo/timbre) e a posicao do joystick, que controla ao
+// vivo a qualidade do acorde aplicada sobre a nota tocada.
 // Chamar inputInit() no setup() e inputUpdate() a cada loop().
 
 void inputInit();
 void inputUpdate();
 
-int getTempoBPM();                 // andamento do arpejador, ja mapeado p/ ARP_BPM_MIN..MAX
-Waveform getSelectedTimbre();      // timbre escolhido pelo pote de timbre
-float getPitchBendSemitones();     // -1..+1 semitom, controlado pelo eixo X do joystick
+int getTempoBPM(); // andamento do arpejador, ja mapeado p/ ARP_BPM_MIN..MAX
 
-// Eixo Y do joystick: retorna -1 (p/ cima), +1 (p/ baixo) ou 0 quando nao ha
-// gesto novo. Um gesto so e reportado uma vez ate o stick voltar ao centro
-// (evita ficar avancando pagina em rajada). Usado p/ navegar as paginas do LCD.
-int8_t consumeDisplayPageGesture();
+// Posicao continua entre timbres, 0..(Waveform::COUNT - 1). Passar direto
+// pra synthSetTimbrePosition() - a mistura entre formas de onda vizinhas
+// acontece no motor de audio, entao girar o pote soa como um morph suave.
+float getTimbrePosition();
 
-// Botao do joystick: true uma unica vez no instante em que foi pressionado
-// (edge-triggered, com debounce). Usado como "panico" (silenciar tudo).
-bool consumePanicPress();
+// Quantidade de glide/portamento, em ms - passar direto pra synthSetGlideMs().
+float getGlideMs();
+
+// Gate do arpejo (staccato <-> legato), 0..1 - passar direto pra synthSetArpGate().
+float getArpGate();
+
+// Qualidade do acorde de acordo com a posicao atual do joystick - usa as 8
+// direcoes (incluindo diagonais) mais o centro e o clique, 10 zonas ao
+// todo. Ver o mapeamento completo em Chords.h (enum ChordType). E lida ao
+// vivo - pode mudar a qualquer momento, inclusive com uma nota ja soando.
+// No centro retorna ChordType::MAJOR (o acorde padrao).
+ChordType getJoystickChordType();
+
+// true quando o joystick esta parado no centro E sem clique. Serve pra quem
+// chama decidir o que "centro" significa em cada contexto: segurando a
+// tecla, centro = nota pura; no arpejo, centro = acorde maior.
+bool isJoystickCentered();

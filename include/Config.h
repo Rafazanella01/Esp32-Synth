@@ -38,31 +38,50 @@ static const uint8_t LCD_ROWS = 2;
 static const int ROW_PINS[4] = {13, 14, 18, 19};   // -> R1 R2 R3 R4 do modulo
 static const int COL_PINS[4] = {23, 16, 17, 2};    // -> C1 C2 C3 C4 do modulo (16=RX2, 17=TX2)
 
-// Layout fisico sugerido (serigrafar/anotar nas teclas):
-//   Linha 1:  C    C#   D    D#
-//   Linha 2:  E    F    F#   G
-//   Linha 3:  G#   A    A#   B
-//   Linha 4:  MAJ  MIN  MIN7 AUG
+// Layout fisico sugerido (serigrafar/anotar nas teclas) - todas as 16 sao
+// notas (hold-to-sustain: toca enquanto segura, para ao soltar):
+//   Linha 1:  C4   C#4  D4   D#4
+//   Linha 2:  E4   F4   F#4  G4
+//   Linha 3:  G#4  A4   A#4  B4
+//   Linha 4:  C5   C#5  D5   D#5
 //
-// As 12 primeiras teclas (linhas 1-3) tocam/alternam o acorde com aquela nota
-// como fundamental. As 4 teclas da linha 4 trocam o tipo de acorde (fica
-// "travado" ate voce escolher outro tipo).
+// A qualidade do acorde (natural/maior/menor/maior7/menor7/aumentado) e
+// escolhida ao vivo pelo joystick, nao pela matriz - ver Input.h.
 
 // -----------------------------------------------------------------------------
-// Joystick analogico (VRx, VRy, SW) -> navegacao de menu / controle expressivo
+// Joystick analogico (VRx, VRy, SW) -> escolhe a qualidade do acorde ao vivo
 // -----------------------------------------------------------------------------
 static const int PIN_JOY_X  = 34; // ADC1, input-only - ok, nao precisa de pull-up
 static const int PIN_JOY_Y  = 35; // ADC1, input-only
 static const int PIN_JOY_SW = 4;  // digital, INPUT_PULLUP (botao ativo em LOW)
 
+// Zona morta do joystick, ja em unidades NORMALIZADAS (0..1 de deflexao),
+// nao em contagens de ADC. Isso importa: o ADC do ESP32 comprime a leitura
+// perto de 3.3V, entao o curso "pra cima" costuma ter bem menos contagens
+// que o curso "pra baixo". Normalizando cada lado pelo seu proprio curso
+// (ver Input.cpp), as 8 direcoes ficam com sensibilidade parecida.
+static const float JOY_DEADZONE_NORM = 0.35f;
+
+// Quantas amostras usar pra descobrir o centro real do joystick no boot.
+// O joystick precisa estar EM REPOUSO quando a placa liga.
+static const int JOY_CALIB_SAMPLES = 32;
+
 // -----------------------------------------------------------------------------
 // Potenciometros 10K (ADC1 - funcionam mesmo com o "WiFi" desligado, sem ruido de ADC2)
 // -----------------------------------------------------------------------------
-static const int PIN_POT_TEMPO  = 32; // gira o andamento (BPM) do arpejador
-static const int PIN_POT_TIMBRE = 33; // varre entre os timbres (morph/seleciona forma de onda)
-// GPIO36 (VP) e GPIO39 (VN) ficam livres para um 3o/4o pote (ex: decay do envelope)
-static const int PIN_POT_SPARE1 = 36;
-static const int PIN_POT_SPARE2 = 39;
+static const int PIN_POT_TEMPO    = 32; // gira o andamento (BPM) do arpejador
+static const int PIN_POT_TIMBRE   = 33; // varre entre os timbres (morph continuo entre formas de onda)
+static const int PIN_POT_GLIDE    = 36; // quanto a nota "desliza" (portamento) entre uma troca e outra
+static const int PIN_POT_ARP_GATE = 39; // staccato (picotado) <-> legato (quase continuo) no arpejo
+
+// Pino de ADC sem nada ligado NAO le "zero" - ele flutua, oscilando sozinho.
+// Como o gate do arpejo e o glide saem desses dois pinos, um pino solto faz
+// o som picotar/sumir sem motivo aparente. Enquanto esses potenciometros
+// nao estiverem fisicamente ligados, deixe as flags abaixo em false: o
+// firmware ignora a leitura e usa o valor padrao fixo.
+// Ligou o potenciometro? Vire a flag correspondente pra true e regrave.
+static const bool POT_GLIDE_CONNECTED = false;
+static const bool POT_ARP_GATE_CONNECTED = false;
 
 // -----------------------------------------------------------------------------
 // Audio
@@ -80,7 +99,18 @@ static const int ARP_BPM_MIN = 60;
 static const int ARP_BPM_MAX = 240;
 static const int ARP_BPM_DEFAULT = 120;
 static const int ARP_NOTE_DIV = 2;     // 1 = seminima, 2 = colcheia, 4 = semicolcheia
-static const float ARP_GATE = 0.75f;   // fracao do passo em que a nota soa (resto = silencio)
+
+// Gate do arpejo (fracao do passo em que a nota soa) - controlado ao vivo
+// pelo PIN_POT_ARP_GATE, entre staccato (curto) e legato (quase continuo).
+static const float ARP_GATE_MIN = 0.15f;
+static const float ARP_GATE_MAX = 0.95f;
+static const float ARP_GATE_DEFAULT = 0.75f;
+
+// Glide (portamento) entre notas - controlado ao vivo pelo PIN_POT_GLIDE,
+// de instantaneo (0ms) ate bem "escorregado".
+static const float GLIDE_MS_MIN = 0.0f;
+static const float GLIDE_MS_MAX = 150.0f;
+static const float GLIDE_MS_DEFAULT = 25.0f;
 
 static const uint32_t DEBOUNCE_MS = 25;
-static const uint32_t ADC_POLL_MS = 30; // intervalo de leitura de pots/joystick
+static const uint32_t ADC_POLL_MS = 12; // intervalo de leitura de pots/joystick (baixo = resposta mais fluida)

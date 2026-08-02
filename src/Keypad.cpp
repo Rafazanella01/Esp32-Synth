@@ -6,6 +6,9 @@ static bool stableState[16];      // true = pressionada (debounced)
 static bool lastRawState[16];     // ultima leitura crua
 static uint32_t lastChangeMs[16]; // timestamp da ultima mudanca crua
 
+static int8_t pendingPressed = -1;
+static int8_t pendingReleased = -1;
+
 void keypadInit() {
     for (int r = 0; r < 4; r++) {
         pinMode(ROW_PINS[r], OUTPUT);
@@ -19,10 +22,11 @@ void keypadInit() {
         lastRawState[i] = false;
         lastChangeMs[i] = 0;
     }
+    pendingPressed = -1;
+    pendingReleased = -1;
 }
 
-int8_t keypadPoll() {
-    int8_t pressedKey = -1;
+void keypadUpdate() {
     uint32_t now = millis();
 
     for (int r = 0; r < 4; r++) {
@@ -40,7 +44,9 @@ int8_t keypadPoll() {
                 if (raw != stableState[idx]) {
                     stableState[idx] = raw;
                     if (raw) {
-                        pressedKey = idx; // borda de subida (nova pressao) debounced
+                        pendingPressed = idx;
+                    } else {
+                        pendingReleased = idx;
                     }
                 }
             }
@@ -48,6 +54,16 @@ int8_t keypadPoll() {
 
         digitalWrite(ROW_PINS[r], HIGH);
     }
+}
 
-    return pressedKey;
+int8_t keypadJustPressed() {
+    int8_t k = pendingPressed;
+    pendingPressed = -1;
+    return k;
+}
+
+int8_t keypadJustReleased() {
+    int8_t k = pendingReleased;
+    pendingReleased = -1;
+    return k;
 }

@@ -19,7 +19,8 @@
   function start() {
     if (starting) return starting;
     starting = (async () => {
-      ctx = new AudioContext({ sampleRate: 44100 });
+      ctx = new AudioContext({ latencyHint: 'interactive' });   // taxa nativa da placa: sem reamostragem
+      window.__ctx = ctx;
       await ctx.audioWorklet.addModule('engine.js');
       node = new AudioWorkletNode(ctx, 'synth', { outputChannelCount: [2] });
       node.port.onmessage = e => {
@@ -29,6 +30,9 @@
       await ctx.resume();
       queue.splice(0).forEach(m => node.port.postMessage(m));
       toPage('i:audio');
+      const reportLat = () => toPage('i:lat:' + (((ctx.baseLatency || 0) + (ctx.outputLatency || 0)) * 1000).toFixed(1) + ':' + ctx.sampleRate);
+      reportLat();
+      setTimeout(reportLat, 1500);   // o navegador só estabiliza a estimativa depois de um tempo
     })();
     return starting;
   }

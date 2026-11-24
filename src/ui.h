@@ -736,6 +736,7 @@ function onMsg(e) {
   else if (a[0] === 's') lamp('lpPed', a[1] === '1');
   else if (a[0] === 'i') {
     if (a[1] === 'audio') lamp('lpAudio', true);
+    if (a[1] === 'lat') { const ms = parseFloat(a[2]); $('lpAudio').lastChild.textContent = 'Áudio ' + (ms > 0 ? Math.round(ms) + ' ms' : ''); lcdFlash(ms > 0 ? 'Latência de áudio ~' + ms.toFixed(0) + ' ms · ' + a[3] + ' Hz' : 'Latência: o navegador não informa'); }
     if (a[1] === 'midi') { midiOn = a.slice(2).join(':').length > 0; lcdFlash(midiOn ? 'Piano MIDI conectado' : 'Sem piano MIDI'); }
   }
 }

@@ -1,0 +1,336 @@
+#pragma once
+#include <pgmspace.h>
+
+static const char INDEX_HTML[] PROGMEM = R"HTML(<!doctype html>
+<html lang="pt-br">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Synth CDP-160S</title>
+<style>
+  :root { --bg:#101215; --card:#1a1d22; --card2:#22262d; --line:#323843; --fg:#e9ebee; --mut:#8a919c; --acc:#02ea75; --warm:#e8b04a; }
+  * { box-sizing:border-box; touch-action:none; user-select:none; -webkit-user-select:none; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px system-ui,sans-serif; padding:16px; max-width:980px; margin:0 auto; }
+  h1 { font-size:18px; margin:0 0 2px; }
+  #st { color:var(--mut); font-size:13px; margin-bottom:14px; }
+  #st.on { color:var(--acc); }
+  .panel { background:var(--card); border-radius:14px; padding:14px 16px; margin-bottom:14px; }
+  .panel h2 { font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--mut); margin:0 0 10px; font-weight:600; }
+  .group h3 { font-size:13px; margin:12px 0 8px; color:var(--warm); font-weight:600; }
+  .group h3:first-child { margin-top:0; }
+  .presets { display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:8px; }
+  .pre { text-align:left; background:var(--card2); border:2px solid var(--line); border-radius:10px; padding:9px 11px; color:var(--fg); font:inherit; cursor:pointer; touch-action:manipulation; }
+  .pre b { display:block; font-size:14px; }
+  .pre span { display:block; font-size:12px; color:var(--mut); margin-top:2px; line-height:1.25; }
+  .pre.sel { border-color:var(--acc); }
+  .pre.sel b { color:var(--acc); }
+  .knobs { display:grid; grid-template-columns:repeat(auto-fit,minmax(84px,1fr)); gap:14px; }
+  .knob { text-align:center; }
+  .dial { width:60px; height:60px; margin:0 auto; border-radius:50%; background:#2a2e36; border:2px solid #3a3f49; position:relative; cursor:ns-resize; }
+  .dial::after { content:""; position:absolute; left:50%; top:6px; width:4px; height:19px; margin-left:-2px; background:var(--acc); border-radius:2px; transform-origin:50% 24px; transform:rotate(var(--rot,-135deg)); }
+  .knob label { display:block; margin-top:6px; font-size:12.5px; }
+  .knob output { display:block; color:var(--mut); font-size:11.5px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+  .tog { flex:1; min-width:120px; padding:10px; background:var(--card2); color:var(--fg); border:2px solid var(--line); border-radius:10px; font:inherit; font-size:14px; cursor:pointer; touch-action:manipulation; }
+  .tog.on { border-color:var(--acc); color:var(--acc); }
+  .dbars { display:flex; gap:8px; justify-content:center; padding:4px 0 8px; }
+  .db { width:38px; text-align:center; }
+  .track { height:140px; background:#0c0d10; border-radius:6px; position:relative; cursor:ns-resize; border:1px solid var(--line); }
+  .bar { position:absolute; left:6px; right:6px; top:0; background:#cfd3d9; border-radius:0 0 3px 3px; }
+  .cap { position:absolute; left:2px; right:2px; height:14px; border-radius:3px; margin-top:-2px; }
+  .db.brown .bar { background:#7a4a24; } .db.brown .cap { background:#9b5f2f; }
+  .db.white .bar { background:#cfd3d9; } .db.white .cap { background:#f4f5f7; }
+  .db.black .bar { background:#3b3f47; } .db.black .cap { background:#15171b; border:1px solid #555; }
+  .db label { display:block; font-size:11px; color:var(--mut); margin-top:5px; }
+  .db output { display:block; font-size:13px; font-weight:600; }
+  .kbtools { display:flex; align-items:center; gap:8px; margin-bottom:8px; font-size:13px; color:var(--mut); }
+  .kbtools button { background:var(--card2); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:6px 12px; font:inherit; cursor:pointer; touch-action:manipulation; }
+  #kb { display:flex; height:130px; position:relative; }
+  .key { flex:1; border:1px solid #000; border-radius:0 0 6px 6px; background:#f2f2f2; }
+  .key.blk { background:#111; height:80px; margin:0 -14px; width:28px; flex:none; z-index:2; border-radius:0 0 4px 4px; }
+  .key.down { background:var(--acc); }
+  .hint { color:var(--mut); font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<h1>Synth CDP-160S</h1>
+<div id="st">desconectado</div>
+
+<div class="panel"><h2>Presets</h2><div id="presets"></div></div>
+
+<div id="pnl-organ" class="panel eng"><h2>Hammond · drawbars</h2>
+  <div class="dbars" id="dbars"></div>
+  <div class="row" id="t-organ"></div>
+  <div class="knobs" id="k-organ" style="margin-top:12px"></div>
+</div>
+<div id="pnl-clav" class="panel eng"><h2>Clavinet · corda, captador e wah</h2><div class="knobs" id="k-clav"></div></div>
+<div id="pnl-rhodes" class="panel eng"><h2>Rhodes</h2><div class="knobs" id="k-rhodes"></div></div>
+<div id="pnl-moog" class="panel eng"><h2>Moog</h2>
+  <div class="knobs" id="k-moog"></div>
+  <div class="row" id="t-moog"></div>
+</div>
+
+<div class="panel"><h2>Efeitos e saída</h2>
+  <div class="knobs" id="k-fx"></div>
+  <div class="row" id="t-fx"></div>
+</div>
+
+<div class="panel"><h2>Teclado de teste</h2>
+  <div class="kbtools"><button id="oct-">−</button><span id="octl"></span><button id="oct+">+</button>
+    <span>· teclas do computador: A W S E D F T G Y H U J K</span></div>
+  <div id="kb"></div>
+</div>
+
+<script>
+/*PRESETS_BEGIN*/
+const DEF = {
+  cutoff:.5, res:.2, attack:.02, decay:.4, sustain:.7, release:.3, volume:.7,
+  pickup:.35, tone:.7, string:.35, click:.3, wah:.5, wahamt:.4, wahmix:0,
+  d0:1, d1:1, d2:1, d3:0, d4:0, d5:0, d6:0, d7:0, d8:0,
+  perc:0, percharm:0, percfast:1, kclick:.3,
+  tine:.5, bark:.5, rdecay:.5, trem:.3, trate:.4,
+  osc2:.5, osc2mix:.8, sub:.5, fenv:.5, fdecay:.4, fsus:.2, glide:0, mono:1,
+  drive:0, leslie:0, lfast:0, reverb:.15
+};
+const G_DP = 'Deep Purple · estilo Jon Lord (Hammond C3 + Leslie + Marshall)';
+const G_SC = 'Stevie Wonder · Clavinet D6';
+const G_SR = 'Stevie Wonder · Fender Rhodes';
+const G_SM = 'Stevie Wonder · Moog';
+const PRESETS = [
+  { id:'org-crunch', group:G_DP, eng:'organ', name:'Rock Crunch', trim:0.3,
+    desc:'888 + Marshall no talo + Leslie rápida. Clima Highway Star / Burn.',
+    p:{ d0:1,d1:1,d2:1, kclick:.5, drive:.7, leslie:.8, lfast:1, reverb:.12 } },
+  { id:'org-lead', group:G_DP, eng:'organ', name:'Lead Leslie Rápida', trim:0.28,
+    desc:'Drawbars abertos no agudo, drive médio. Solo de órgão rock.',
+    p:{ d0:1,d1:1,d2:1,d3:.75,d4:.5,d5:.5,d8:.25, kclick:.45, drive:.55, leslie:.85, lfast:1, reverb:.15 } },
+  { id:'org-swell', group:G_DP, eng:'organ', name:'Swell Leslie Lenta', trim:0.26,
+    desc:'Drive moderado, Leslie lenta e sala grande. Clima Child in Time.',
+    p:{ d0:1,d1:1,d2:.75,d3:.5, kclick:.3, drive:.4, leslie:.9, lfast:0, reverb:.35 } },
+  { id:'org-gospel', group:G_DP, eng:'organ', name:'Gospel Limpo', trim:0.41,
+    desc:'888 limpo, Leslie lenta. Base de acordes sem distorção.',
+    p:{ d0:1,d1:1,d2:1, kclick:.25, drive:0, leslie:.7, lfast:0, reverb:.2 } },
+  { id:'org-jazz', group:G_DP, eng:'organ', name:'Jazz Percussão 3ª', trim:0.44,
+    desc:'Poucos drawbars e percussão na 3ª harmônica. Som de trio de jazz.',
+    p:{ d0:1,d1:1,d2:0, perc:1, percharm:1, percfast:1, kclick:.3, drive:.1, leslie:.6, lfast:0, reverb:.15 } },
+  { id:'org-full', group:G_DP, eng:'organ', name:'Drawbars Cheios', trim:0.27,
+    desc:'888888888 com drive leve e Leslie rápida. Som grande e brilhante.',
+    p:{ d0:1,d1:1,d2:1,d3:1,d4:1,d5:1,d6:1,d7:1,d8:1, kclick:.35, drive:.3, leslie:.7, lfast:1, reverb:.15 } },
+
+  { id:'clav-super', group:G_SC, eng:'clav', name:'Superstition', trim:0.65,
+    desc:'Captador no meio, ataque seco, wah automático. Clima Superstition.',
+    p:{ pickup:.55, tone:.8, string:.28, click:.5, wah:.35, wahamt:.65, wahmix:.55, drive:.12, reverb:.06 } },
+  { id:'clav-higher', group:G_SC, eng:'clav', name:'Higher Ground', trim:0.52,
+    desc:'Mais sujo e agressivo, com drive e wah. Clima Higher Ground.',
+    p:{ pickup:.4, tone:.85, string:.22, click:.55, wah:.5, wahamt:.4, wahmix:.35, drive:.5, reverb:.05 } },
+  { id:'clav-seco', group:G_SC, eng:'clav', name:'Clavinet Seco', trim:0.18,
+    desc:'Sem wah nem drive. O som cru do instrumento.',
+    p:{ pickup:.3, tone:.65, string:.35, click:.35, wahmix:0, drive:0, reverb:.05 } },
+
+  { id:'rh-suave', group:G_SR, eng:'rhodes', name:'Balada Suave', trim:0.45,
+    desc:'Tine suave, decay longo, tremolo lento e reverb.',
+    p:{ tine:.45, bark:.3, rdecay:.65, trem:.4, trate:.25, reverb:.3 } },
+  { id:'rh-bark', group:G_SR, eng:'rhodes', name:'Bark Forte', trim:0.49,
+    desc:'Ataque com mordida quando se toca forte, drive leve.',
+    p:{ tine:.6, bark:.85, rdecay:.5, trem:.15, trate:.5, drive:.15, reverb:.15 } },
+  { id:'rh-suitcase', group:G_SR, eng:'rhodes', name:'Vibrato Suitcase', trim:0.46,
+    desc:'Auto-pan estéreo marcado, estilo Rhodes de mala.',
+    p:{ tine:.5, bark:.45, rdecay:.55, trem:.75, trate:.45, reverb:.2 } },
+
+  { id:'mg-funk', group:G_SM, eng:'moog', name:'Baixo Funk', trim:0.64,
+    desc:'Dois osciladores e sub, filtro que abre e fecha rápido.',
+    p:{ cutoff:.26, res:.35, fenv:.68, fdecay:.3, fsus:.12, osc2:.4, osc2mix:.8, sub:.55, glide:.04, attack:0, decay:.35, sustain:.8, release:.2, reverb:.02 } },
+  { id:'mg-sub', group:G_SM, eng:'moog', name:'Baixo Sub', trim:0.44,
+    desc:'Grave redondo, mais sub e filtro mais fechado.',
+    p:{ cutoff:.18, res:.15, fenv:.35, fdecay:.35, fsus:.3, osc2:.3, osc2mix:.3, sub:1, glide:.03, attack:0, decay:.4, sustain:.85, release:.2, reverb:0 } },
+  { id:'mg-lead', group:G_SM, eng:'moog', name:'Lead Portamento', trim:0.62,
+    desc:'Solo com glide entre as notas e ressonância.',
+    p:{ cutoff:.55, res:.38, fenv:.35, fdecay:.5, fsus:.5, osc2:.6, osc2mix:1, sub:.3, glide:.45, attack:.02, decay:.5, sustain:.85, release:.25, drive:.1, reverb:.2 } }
+];
+/*PRESETS_END*/
+
+const fmtPct = v => Math.round(v*100)+'%';
+const KNOBS = {
+  clav: [
+    ['pickup','Captador',fmtPct], ['tone','Tom',fmtPct], ['string','Decay',v=>(0.05*Math.pow(120,v)).toFixed(2)+' s'],
+    ['click','Click',fmtPct], ['wah','Wah pos.',fmtPct], ['wahamt','Auto-wah',fmtPct], ['wahmix','Wah mix',fmtPct]
+  ],
+  rhodes: [
+    ['tine','Tine',fmtPct], ['bark','Bark',fmtPct], ['rdecay','Decay',v=>Math.pow(8,v).toFixed(1)+' s'],
+    ['trem','Tremolo',fmtPct], ['trate','Vel. trem.',v=>(0.5+6.5*v).toFixed(1)+' Hz']
+  ],
+  moog: [
+    ['cutoff','Cutoff',v=>Math.round(Math.min(40*Math.pow(300,v),7500))+' Hz'], ['res','Resonance',fmtPct],
+    ['fenv','Env filtro',fmtPct], ['fdecay','Decay filtro',v=>(0.01*Math.pow(300,v)).toFixed(2)+' s'], ['fsus','Sust. filtro',fmtPct],
+    ['osc2','Detune',v=>Math.round(v*25)+' c'], ['osc2mix','Osc 2',fmtPct], ['sub','Sub',fmtPct], ['glide','Glide',fmtPct],
+    ['attack','Attack',v=>(0.002*Math.pow(1000,v)).toFixed(3)+' s'], ['decay','Decay',v=>(0.01*Math.pow(300,v)).toFixed(2)+' s'],
+    ['sustain','Sustain',fmtPct], ['release','Release',v=>(0.01*Math.pow(500,v)).toFixed(2)+' s']
+  ],
+  organ: [ ['kclick','Key click',fmtPct] ],
+  fx: [ ['drive','Drive',fmtPct], ['leslie','Leslie',fmtPct], ['reverb','Reverb',fmtPct], ['volume','Volume',fmtPct] ]
+};
+const TOGGLES = {
+  perc:['Percussão: off','Percussão: on'], percharm:['Perc 2ª harm.','Perc 3ª harm.'], percfast:['Perc lenta','Perc rápida'],
+  lfast:['Leslie lenta','Leslie rápida'], mono:['Poli','Mono']
+};
+const TOG_PANEL = { perc:'t-organ', percharm:'t-organ', percfast:'t-organ', mono:'t-moog', lfast:'t-fx' };
+const DB = [ ['d0',"16'",'brown'], ['d1',"5⅓'",'brown'], ['d2',"8'",'white'], ['d3',"4'",'white'], ['d4',"2⅔'",'black'],
+             ['d5',"2'",'white'], ['d6',"1⅗'",'black'], ['d7',"1⅓'",'black'], ['d8',"1'",'white'] ];
+
+const vals = {};
+const setters = {};
+let ws = null, lastSend = {};
+let curPreset = PRESETS[0];
+
+function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
+
+function setParam(name, v, emit) {
+  v = Math.min(1, Math.max(0, v));
+  vals[name] = v;
+  if (setters[name]) setters[name](v);
+  if (emit) {
+    const now = performance.now();
+    if (now - (lastSend[name] || 0) > 16) { lastSend[name] = now; send('p:' + name + ':' + v.toFixed(4)); }
+  }
+}
+function flush(name) { send('p:' + name + ':' + vals[name].toFixed(4)); }
+
+function buildKnobs(panelId, list) {
+  const host = document.getElementById(panelId);
+  list.forEach(([name, label, fmt]) => {
+    const el = document.createElement('div');
+    el.className = 'knob';
+    el.innerHTML = '<div class="dial"></div><label>' + label + '</label><output></output>';
+    host.appendChild(el);
+    const dial = el.querySelector('.dial'), out = el.querySelector('output');
+    setters[name] = v => { dial.style.setProperty('--rot', (-135 + v * 270) + 'deg'); out.textContent = fmt(v); };
+    let startY = 0, startV = 0;
+    dial.addEventListener('pointerdown', e => { dial.setPointerCapture(e.pointerId); startY = e.clientY; startV = vals[name]; });
+    dial.addEventListener('pointermove', e => { if (dial.hasPointerCapture(e.pointerId)) setParam(name, startV + (startY - e.clientY) / 150, true); });
+    dial.addEventListener('pointerup', () => flush(name));
+    dial.addEventListener('dblclick', () => { setParam(name, curPreset.p[name] !== undefined ? curPreset.p[name] : DEF[name], false); flush(name); });
+  });
+}
+for (const k in KNOBS) buildKnobs('k-' + k, KNOBS[k]);
+
+for (const name in TOGGLES) {
+  const b = document.createElement('button');
+  b.className = 'tog';
+  document.getElementById(TOG_PANEL[name]).appendChild(b);
+  setters[name] = v => { b.classList.toggle('on', v > 0.5); b.textContent = TOGGLES[name][v > 0.5 ? 1 : 0]; };
+  b.addEventListener('click', () => { setParam(name, vals[name] > 0.5 ? 0 : 1, false); flush(name); });
+}
+
+(function buildDrawbars() {
+  const host = document.getElementById('dbars');
+  DB.forEach(([name, label, color]) => {
+    const el = document.createElement('div');
+    el.className = 'db ' + color;
+    el.innerHTML = '<div class="track"><div class="bar"></div><div class="cap"></div></div><output></output><label>' + label + '</label>';
+    host.appendChild(el);
+    const track = el.querySelector('.track'), bar = el.querySelector('.bar'), cap = el.querySelector('.cap'), out = el.querySelector('output');
+    setters[name] = v => {
+      const lv = Math.round(v * 8), h = track.clientHeight || 140;
+      const y = (lv / 8) * (h - 14);
+      bar.style.height = (y + 14) + 'px'; cap.style.top = y + 'px'; out.textContent = lv;
+    };
+    const fromEvent = e => {
+      const r = track.getBoundingClientRect();
+      return Math.round(Math.min(1, Math.max(0, (e.clientY - r.top - 7) / (r.height - 14))) * 8) / 8;
+    };
+    track.addEventListener('pointerdown', e => { track.setPointerCapture(e.pointerId); setParam(name, fromEvent(e), true); });
+    track.addEventListener('pointermove', e => { if (track.hasPointerCapture(e.pointerId)) setParam(name, fromEvent(e), true); });
+    track.addEventListener('pointerup', () => flush(name));
+  });
+})();
+
+function showEngine(eng) {
+  document.querySelectorAll('.eng').forEach(p => { p.style.display = p.id === 'pnl-' + eng ? '' : 'none'; });
+  for (const name of DB.map(d => d[0])) if (setters[name]) setters[name](vals[name] !== undefined ? vals[name] : DEF[name]);
+}
+
+function applyPreset(pr) {
+  curPreset = pr;
+  send('e:' + pr.eng);
+  for (const name in DEF) {
+    const v = pr.p[name] !== undefined ? pr.p[name] : DEF[name];
+    vals[name] = v;
+    if (setters[name]) setters[name](v);
+    send('p:' + name + ':' + v.toFixed(4));
+  }
+  send('p:trim:' + pr.trim);
+  showEngine(pr.eng);
+  document.querySelectorAll('.pre').forEach(b => b.classList.toggle('sel', b.dataset.id === pr.id));
+}
+
+(function buildPresets() {
+  const host = document.getElementById('presets');
+  let group = null, grid = null;
+  PRESETS.forEach(pr => {
+    if (pr.group !== group) {
+      group = pr.group;
+      const wrap = document.createElement('div'); wrap.className = 'group';
+      wrap.innerHTML = '<h3></h3><div class="presets"></div>';
+      wrap.querySelector('h3').textContent = group;
+      host.appendChild(wrap);
+      grid = wrap.querySelector('.presets');
+    }
+    const b = document.createElement('button');
+    b.className = 'pre'; b.dataset.id = pr.id;
+    b.innerHTML = '<b></b><span></span>';
+    b.querySelector('b').textContent = pr.name;
+    b.querySelector('span').textContent = pr.desc;
+    b.addEventListener('click', () => applyPreset(pr));
+    grid.appendChild(b);
+  });
+})();
+
+// ----- teclado -----
+let kbBase = 48;
+const kb = document.getElementById('kb');
+const isBlack = n => [1,3,6,8,10].includes(n % 12);
+const NN = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteOn(n, vel) { send('on:' + n + ':' + (vel || 100)); }
+function noteOff(n) { send('off:' + n); }
+function buildKeys() {
+  kb.innerHTML = '';
+  document.getElementById('octl').textContent = 'C' + (Math.floor(kbBase / 12) - 1) + ' a C' + (Math.floor(kbBase / 12) + 1);
+  for (let n = kbBase; n < kbBase + 25; n++) {
+    const k = document.createElement('div');
+    k.className = 'key' + (isBlack(n) ? ' blk' : '');
+    k.dataset.n = n;
+    k.addEventListener('pointerdown', e => { e.preventDefault(); k.setPointerCapture(e.pointerId); k.classList.add('down'); noteOn(n); });
+    const off = () => { if (k.classList.contains('down')) { k.classList.remove('down'); noteOff(n); } };
+    k.addEventListener('pointerup', off);
+    k.addEventListener('pointercancel', off);
+    kb.appendChild(k);
+  }
+}
+document.getElementById('oct-').addEventListener('click', () => { kbBase = Math.max(24, kbBase - 12); buildKeys(); });
+document.getElementById('oct+').addEventListener('click', () => { kbBase = Math.min(84, kbBase + 12); buildKeys(); });
+buildKeys();
+
+const KEYMAP = { a:0, w:1, s:2, d:4, e:3, f:5, t:6, g:7, y:8, h:9, u:10, j:11, k:12 };
+const pressed = {};
+window.addEventListener('keydown', e => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  const s = KEYMAP[e.key.toLowerCase()];
+  if (s === undefined || pressed[e.key]) return;
+  pressed[e.key] = kbBase + s; noteOn(kbBase + s);
+});
+window.addEventListener('keyup', e => {
+  if (pressed[e.key] !== undefined) { noteOff(pressed[e.key]); delete pressed[e.key]; }
+});
+
+function connect() {
+  const st = document.getElementById('st');
+  ws = new WebSocket('ws://' + location.hostname + ':81/');
+  ws.onopen = () => { st.textContent = 'conectado'; st.className = 'on'; applyPreset(curPreset); };
+  ws.onclose = () => { st.textContent = 'desconectado, tentando de novo...'; st.className = ''; setTimeout(connect, 1000); };
+}
+for (const name in DEF) vals[name] = DEF[name];
+applyPreset(curPreset);
+connect();
+</script>
+</body>
+</html>
+)HTML";

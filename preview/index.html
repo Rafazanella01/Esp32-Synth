@@ -205,7 +205,7 @@
   <div class="rowsw" id="t-organ" style="justify-content:center"></div>
   <div class="knobs" id="k-organ" style="margin-top:12px"></div>
 </div>
-<div id="pnl-clav" class="pnl eng"><h2>Clavinet · corda, captador e wah</h2><div class="knobs" id="k-clav"></div></div>
+<div id="pnl-clav" class="pnl eng"><h2>Clavinet · corda, captador e wah</h2><div class="knobs" id="k-clav"></div><div class="rowsw" id="t-clav"></div></div>
 <div id="pnl-rhodes" class="pnl eng"><h2>Piano elétrico de martelo e tine</h2><div class="knobs" id="k-rhodes"></div></div>
 <div id="pnl-moog" class="pnl eng"><h2>Sintetizador analógico · filtro ladder</h2>
   <div class="knobs" id="k-moog"></div>
@@ -234,6 +234,8 @@
     <button class="sw" id="sq-demo">Demo original</button>
     <input type="file" id="sq-file" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none">
   </div>
+  <div class="cap-lbl" style="margin:16px 0 8px">Biblioteca · domínio público (escrita de memória, pode ter imprecisões)</div>
+  <div class="rowsw" id="sq-lib" style="margin-top:0"></div>
   <div class="sqinfo">
     <div class="segd" id="sq-time" style="min-width:128px;font-size:16px">00:00 / 00:00</div>
     <div id="sq-bar"><i></i></div>
@@ -273,65 +275,66 @@ const DEF = {
   tine:.5, bark:.5, rdecay:.5, trem:.3, trate:.4,
   osc2:.5, osc2mix:.8, sub:.5, fenv:.5, fdecay:.4, fsus:.2, glide:0, mono:1,
   drive:0, leslie:0, lfast:0, reverb:.15,
-  phaser:0, phrate:.3, chorus:0, delay:0, dtime:.4, dfb:.3
+  phaser:0, phrate:.3, chorus:0, delay:0, dtime:.4, dfb:.3,
+  vib:0, vibc:1, cphase:0
 };
 const G_DP = 'Deep Purple · estilo Jon Lord (Hammond C3 + Leslie + Marshall)';
 const G_SC = 'Stevie Wonder · Clavinet D6';
 const G_SR = 'Stevie Wonder · Fender Rhodes';
 const G_SM = 'Stevie Wonder · Moog';
 const PRESETS = [
-  { id:'org-crunch', group:G_DP, eng:'organ', name:'Rock Crunch', trim:0.3,
+  { id:'org-crunch', group:G_DP, eng:'organ', name:'Rock Crunch', trim:0.31,
     desc:'888 + Marshall no talo + Leslie rápida. Clima Highway Star / Burn.',
-    p:{ d0:1,d1:1,d2:1, kclick:.5, drive:.7, leslie:.8, lfast:1, reverb:.12 } },
-  { id:'org-lead', group:G_DP, eng:'organ', name:'Lead Leslie Rápida', trim:0.28,
+    p:{ d0:1,d1:1,d2:1, kclick:.5, drive:.7, leslie:.8, lfast:1, reverb:.12, vib:0 } },
+  { id:'org-lead', group:G_DP, eng:'organ', name:'Lead Leslie Rápida', trim:0.3,
     desc:'Drawbars abertos no agudo, drive médio. Solo de órgão rock.',
     p:{ d0:1,d1:1,d2:1,d3:.75,d4:.5,d5:.5,d8:.25, kclick:.45, drive:.55, leslie:.85, lfast:1, reverb:.15 } },
-  { id:'org-swell', group:G_DP, eng:'organ', name:'Swell Leslie Lenta', trim:0.26,
+  { id:'org-swell', group:G_DP, eng:'organ', name:'Swell Leslie Lenta', trim:0.3,
     desc:'Drive moderado, Leslie lenta e sala grande. Clima Child in Time.',
-    p:{ d0:1,d1:1,d2:.75,d3:.5, kclick:.3, drive:.4, leslie:.9, lfast:0, reverb:.35 } },
-  { id:'org-gospel', group:G_DP, eng:'organ', name:'Gospel Limpo', trim:0.41,
+    p:{ d0:1,d1:1,d2:.75,d3:.5, kclick:.3, drive:.4, leslie:.9, lfast:0, reverb:.35, vib:.45, vibc:0 } },
+  { id:'org-gospel', group:G_DP, eng:'organ', name:'Gospel Limpo', trim:0.63,
     desc:'888 limpo, Leslie lenta. Base de acordes sem distorção.',
-    p:{ d0:1,d1:1,d2:1, kclick:.25, drive:0, leslie:.7, lfast:0, reverb:.2 } },
-  { id:'org-jazz', group:G_DP, eng:'organ', name:'Jazz Percussão 3ª', trim:0.44,
+    p:{ d0:1,d1:1,d2:1, kclick:.25, drive:0, leslie:.7, lfast:0, reverb:.2, vib:.75, vibc:1 } },
+  { id:'org-jazz', group:G_DP, eng:'organ', name:'Jazz Percussão 3ª', trim:0.61,
     desc:'Poucos drawbars e percussão na 3ª harmônica. Som de trio de jazz.',
-    p:{ d0:1,d1:1,d2:0, perc:1, percharm:1, percfast:1, kclick:.3, drive:.1, leslie:.6, lfast:0, reverb:.15 } },
-  { id:'org-full', group:G_DP, eng:'organ', name:'Drawbars Cheios', trim:0.27,
+    p:{ d0:1,d1:1,d2:0, perc:1, percharm:1, percfast:1, kclick:.3, drive:.1, leslie:.6, lfast:0, reverb:.15, vib:.55, vibc:1 } },
+  { id:'org-full', group:G_DP, eng:'organ', name:'Drawbars Cheios', trim:0.33,
     desc:'888888888 com drive leve e Leslie rápida. Som grande e brilhante.',
-    p:{ d0:1,d1:1,d2:1,d3:1,d4:1,d5:1,d6:1,d7:1,d8:1, kclick:.35, drive:.3, leslie:.7, lfast:1, reverb:.15 } },
+    p:{ d0:1,d1:1,d2:1,d3:1,d4:1,d5:1,d6:1,d7:1,d8:1, kclick:.35, drive:.3, leslie:.7, lfast:1, reverb:.15, vib:.6, vibc:1 } },
 
-  { id:'clav-super', group:G_SC, eng:'clav', name:'Superstition', trim:0.65,
+  { id:'clav-super', group:G_SC, eng:'clav', name:'Superstition', trim:0.71,
     desc:'Captador no meio, ataque seco, wah automático. Clima Superstition.',
     p:{ pickup:.55, tone:.8, string:.28, click:.5, wah:.35, wahamt:.65, wahmix:.55, drive:.12, reverb:.06 } },
-  { id:'clav-higher', group:G_SC, eng:'clav', name:'Higher Ground', trim:0.52,
+  { id:'clav-higher', group:G_SC, eng:'clav', name:'Higher Ground', trim:0.6,
     desc:'Mais sujo e agressivo, com drive e wah. Clima Higher Ground.',
     p:{ pickup:.4, tone:.85, string:.22, click:.55, wah:.5, wahamt:.4, wahmix:.35, drive:.5, reverb:.05 } },
-  { id:'clav-seco', group:G_SC, eng:'clav', name:'Clavinet Seco', trim:0.18,
+  { id:'clav-seco', group:G_SC, eng:'clav', name:'Clavinet Seco', trim:0.24,
     desc:'Sem wah nem drive. O som cru do instrumento.',
-    p:{ pickup:.3, tone:.65, string:.35, click:.35, wahmix:0, drive:0, reverb:.05 } },
-  { id:'clav-phaser', group:G_SC, eng:'clav', name:'Clavinet Phaser', trim:0.41,
+    p:{ pickup:.3, tone:.65, string:.35, click:.35, wahmix:0, drive:0, reverb:.05, cphase:1 } },
+  { id:'clav-phaser', group:G_SC, eng:'clav', name:'Clavinet Phaser', trim:0.48,
     desc:'Phaser de pedal girando devagar sobre o clavinet. Funk dos anos 70.',
     p:{ pickup:.5, tone:.75, string:.3, click:.45, wahmix:0, drive:.1, phaser:.65, phrate:.22, reverb:.08 } },
 
-  { id:'rh-suave', group:G_SR, eng:'rhodes', name:'Balada Suave', trim:0.5,
+  { id:'rh-suave', group:G_SR, eng:'rhodes', name:'Balada Suave', trim:0.24,
     desc:'Tine suave, decay longo, tremolo lento, chorus e eco curto.',
     p:{ tine:.45, bark:.3, rdecay:.65, trem:.4, trate:.25, chorus:.45, delay:.18, dtime:.45, dfb:.3, reverb:.3 } },
-  { id:'rh-bark', group:G_SR, eng:'rhodes', name:'Bark Forte', trim:0.49,
+  { id:'rh-bark', group:G_SR, eng:'rhodes', name:'Bark Forte', trim:0.48,
     desc:'Ataque com mordida quando se toca forte, drive leve.',
     p:{ tine:.6, bark:.85, rdecay:.5, trem:.15, trate:.5, drive:.15, reverb:.15 } },
-  { id:'rh-suitcase', group:G_SR, eng:'rhodes', name:'Vibrato Suitcase', trim:0.46,
+  { id:'rh-suitcase', group:G_SR, eng:'rhodes', name:'Vibrato Suitcase', trim:0.27,
     desc:'Auto-pan estéreo marcado, estilo Rhodes de mala.',
     p:{ tine:.5, bark:.45, rdecay:.55, trem:.75, trate:.45, reverb:.2 } },
-  { id:'rh-phaser', group:G_SR, eng:'rhodes', name:'Rhodes Phaser 70s', trim:0.37,
+  { id:'rh-phaser', group:G_SR, eng:'rhodes', name:'Rhodes Phaser 70s', trim:0.18,
     desc:'Phaser lento mais chorus. O piano elétrico de disco de 1975.',
     p:{ tine:.5, bark:.4, rdecay:.6, trem:0, phaser:.6, phrate:.18, chorus:.35, reverb:.25 } },
 
-  { id:'mg-funk', group:G_SM, eng:'moog', name:'Baixo Funk', trim:0.64,
+  { id:'mg-funk', group:G_SM, eng:'moog', name:'Baixo Funk', trim:0.65,
     desc:'Dois osciladores e sub, filtro que abre e fecha rápido.',
     p:{ cutoff:.26, res:.35, fenv:.68, fdecay:.3, fsus:.12, osc2:.4, osc2mix:.8, sub:.55, glide:.04, attack:0, decay:.35, sustain:.8, release:.2, reverb:.02 } },
   { id:'mg-sub', group:G_SM, eng:'moog', name:'Baixo Sub', trim:0.44,
     desc:'Grave redondo, mais sub e filtro mais fechado.',
     p:{ cutoff:.18, res:.15, fenv:.35, fdecay:.35, fsus:.3, osc2:.3, osc2mix:.3, sub:1, glide:.03, attack:0, decay:.4, sustain:.85, release:.2, reverb:0 } },
-  { id:'mg-lead', group:G_SM, eng:'moog', name:'Lead Portamento', trim:0.61,
+  { id:'mg-lead', group:G_SM, eng:'moog', name:'Lead Portamento', trim:0.67,
     desc:'Solo com glide entre as notas, ressonância e eco de fita.',
     p:{ cutoff:.55, res:.38, fenv:.35, fdecay:.5, fsus:.5, osc2:.6, osc2mix:1, sub:.3, glide:.45, attack:.02, decay:.5, sustain:.85, release:.25, drive:.1, delay:.3, dtime:.42, dfb:.35, reverb:.2 } }
 ];
@@ -468,6 +471,103 @@ function buildDemo() {
     { name: 'Órgão', notes: org.filter(e => e.k === 'on').length, map: 'A', events: org },
     { name: 'Baixo', notes: bass.filter(e => e.k === 'on').length, map: 'B', events: bass } ] };
 }
+
+function noteNum(name) {
+  const m = /^([A-G])(#|b)?(-?\d)$/.exec(name);
+  if (!m) throw new Error('nota inválida: ' + name);
+  const base = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 }[m[1]];
+  return 12 * (parseInt(m[3], 10) + 1) + base + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+}
+// lista de [nota | [notas] | null (pausa), duração em tempos]; devolve eventos em segundos
+function seqNotes(list, bpm, vel, gate, t0) {
+  const spb = 60 / bpm;
+  let t = t0 || 0;
+  const ev = [];
+  for (const [nn, b] of list) {
+    const names = nn === null ? [] : Array.isArray(nn) ? nn : [nn];
+    for (const nm of names) {
+      const n = noteNum(nm);
+      ev.push({ t, k: 'on', n, v: vel });
+      ev.push({ t: t + b * spb * gate, k: 'off', n });
+    }
+    t += b * spb;
+  }
+  return { events: ev, end: t };
+}
+function mkTrack(name, map, r) {
+  r.events.sort((a, b) => a.t - b.t);
+  return { name, map, notes: r.events.filter(e => e.k === 'on').length, events: r.events };
+}
+function mkSong(name, tracks) {
+  let dur = 0;
+  tracks.forEach(t => t.events.forEach(e => { if (e.t > dur) dur = e.t; }));
+  return { name, dur: dur + 0.8, tracks };
+}
+
+// Músicas de domínio público escritas aqui de memória, para testar o tocador. Podem ter pequenas imprecisões.
+const LIBRARY = [
+  { id: 'ode', title: 'Ode à Alegria', by: 'Beethoven', a: 'rh-suave', b: 'mg-sub', build() {
+      const m1 = [['E4',1],['E4',1],['F4',1],['G4',1],['G4',1],['F4',1],['E4',1],['D4',1],['C4',1],['C4',1],['D4',1],['E4',1]];
+      const l1 = m1.concat([['E4',1.5],['D4',.5],['D4',2]]);
+      const l2 = m1.concat([['D4',1.5],['C4',.5],['C4',2]]);
+      const br = [['D4',1],['D4',1],['E4',1],['C4',1],['D4',1],['E4',.5],['F4',.5],['E4',1],['C4',1],
+                  ['D4',1],['E4',.5],['F4',.5],['E4',1],['D4',1],['C4',1],['D4',1],['G3',2]];
+      const mel = seqNotes([].concat(l1, l2, br, l1, l2), 100, 96, 0.92);
+      const bassL = [];
+      const bar = (n) => n ? [[n, 4]] : [['G2', 2], ['C3', 2]];
+      const progr = ['C3','G2','C3','G2','C3','G2','C3',null,'G2','G2','G2',null,'C3','G2','C3','G2','C3','G2','C3',null];
+      progr.forEach(n => bassL.push(...bar(n)));
+      const bass = seqNotes(bassL, 100, 90, 0.97);
+      return mkSong('Ode à Alegria', [mkTrack('Melodia', 'A', mel), mkTrack('Baixo', 'B', bass)]);
+  } },
+  { id: 'parabens', title: 'Parabéns pra Você', by: 'tradicional', a: 'rh-suave', b: null, build() {
+      const mel = seqNotes([
+        ['G4',.75],['G4',.25],['A4',1],['G4',1],['C5',1],['B4',2],
+        ['G4',.75],['G4',.25],['A4',1],['G4',1],['D5',1],['C5',2],
+        ['G4',.75],['G4',.25],['G5',1],['E5',1],['C5',1],['B4',1],['A4',1],
+        ['F5',.75],['F5',.25],['E5',1],['C5',1],['D5',1],['C5',2]], 96, 92, 0.92);
+      const C = ['C3','G3'], G = ['G2','D3'], F = ['F2','C3'];
+      const bass = seqNotes([C, G, G, C, C, F, G, C].map(ch => [ch, 3]), 96, 80, 0.95);
+      return mkSong('Parabéns pra Você', [mkTrack('Melodia', 'A', mel), mkTrack('Acordes', 'A', bass)]);
+  } },
+  { id: 'jingle', title: 'Jingle Bells (refrão)', by: 'J. Pierpont', a: 'clav-seco', b: null, vol: 1, build() {
+      const mel = seqNotes([
+        ['E4',1],['E4',1],['E4',2],['E4',1],['E4',1],['E4',2],['E4',1],['G4',1],['C4',1.5],['D4',.5],['E4',4],
+        ['F4',1],['F4',1],['F4',1.5],['F4',.5],['F4',1],['E4',1],['E4',1],['E4',.5],['E4',.5],
+        ['E4',1],['D4',1],['D4',1],['E4',1],['D4',2],['G4',2]], 150, 100, 0.8);
+      return mkSong('Jingle Bells (refrão)', [mkTrack('Melodia', 'A', mel)]);
+  } },
+  { id: 'canon', title: 'Canon em Ré (trecho)', by: 'Pachelbel', a: 'rh-suave', b: 'mg-sub', build() {
+      const chords = [['D4','F#4','A4'],['C#4','E4','A4'],['B3','D4','F#4'],['A3','C#4','F#4'],['B3','D4','G4'],['A3','D4','F#4'],['B3','D4','G4'],['C#4','E4','A4']];
+      const bassN = ['D3','A2','B2','F#2','G2','D3','G2','A2'];
+      const bassL = [], chL = [], arp = [];
+      for (let c = 0; c < 3; c++) bassN.forEach(n => bassL.push([n, 2]));
+      for (let c = 0; c < 3; c++) chords.forEach(ch => chL.push([ch, 2]));
+      chords.forEach((ch, i) => { for (let k = 0; k < 4; k++) arp.push([ch[k % 3], .5]); });
+      const theme = [['F#5',.5],['E5',.5],['D5',.5],['C#5',.5],['B4',.5],['A4',.5],['B4',.5],['C#5',.5],
+                     ['D5',.5],['C#5',.5],['B4',.5],['A4',.5],['G4',.5],['F#4',.5],['G4',.5],['E4',.5]];
+      const bass = seqNotes(bassL, 72, 88, 0.98);
+      const harm = seqNotes(chL, 72, 70, 0.96);
+      const beat = 60 / 72;
+      const arpR = seqNotes([].concat(arp, arp), 72, 78, 0.9, 16 * beat);
+      const mel = seqNotes(theme, 72, 100, 0.95, 32 * beat);
+      const end = seqNotes([[['D5','F#5','A5'],4]], 72, 96, 0.98, 48 * beat);
+      const endB = seqNotes([['D3',4]], 72, 90, 0.98, 48 * beat);
+      return mkSong('Canon em Ré (trecho)', [
+        mkTrack('Melodia e acordes', 'A', { events: [].concat(harm.events, arpR.events, mel.events, end.events) }),
+        mkTrack('Baixo', 'B', { events: [].concat(bass.events, endB.events) })]);
+  } },
+  { id: 'toccata', title: 'Tocata e Fuga em Ré menor (abertura)', by: 'J. S. Bach', a: 'org-swell', b: null, build() {
+      // andamento livre: 60 BPM, então 1 tempo = 1 segundo. Interpretação aproximada da abertura.
+      const p1 = [[['A5','A4'],.13],[['G5','G4'],.13],[['A5','A4'],2.2],[['G5','G4'],.55],[['F5','F4'],.55],[['E5','E4'],.55],[['D5','D4'],.55],[['C#5','C#4'],.55],[['D5','D4'],3.4],[null,.8]];
+      const p2 = [[['A4','A3'],.13],[['G4','G3'],.13],[['A4','A3'],1.6],[['E4','E3'],.55],[['F4','F3'],.55],[['C#4','C#3'],.55],[['D4','D3'],3.6],[null,.9]];
+      const arp = [];
+      ['D3','F3','A3','D4','F4','A4','D5','F5','A5','D6','A5','F5','D5','A4','F4','D4','A3','F3','D3'].forEach(n => arp.push([n, .16]));
+      const fin = [[['D2','D3','A3','D4','F4','A4','D5'], 6.5]];
+      const r = seqNotes([].concat(p1, p2, arp, [[null,.4]], fin), 60, 100, 0.97);
+      return mkSong('Tocata e Fuga em Ré menor (abertura)', [mkTrack('Órgão', 'A', r)]);
+  } }
+];
 /*MIDI_END*/
 
 
@@ -486,7 +586,7 @@ const KNOBS = {
     ['osc2','Detune',v=>Math.round(v*25)+'c'], ['osc2mix','Osc 2',fmtPct], ['sub','Sub',fmtPct], ['glide','Glide',fmtPct],
     ['attack','Attack',v=>(0.002*Math.pow(1000,v)).toFixed(3)+'s'], ['decay','Decay',v=>(0.01*Math.pow(300,v)).toFixed(2)+'s'],
     ['sustain','Sustain',fmtPct], ['release','Release',v=>(0.01*Math.pow(500,v)).toFixed(2)+'s'] ]],
-  organ: ['al', [ ['kclick','Key click',fmtPct] ]],
+  organ: ['al', [ ['kclick','Key click',fmtPct], ['vib','Scanner',fmtPct] ]],
   fx1: ['bk', [ ['drive','Drive',fmtPct], ['leslie','Leslie',fmtPct] ]],
   fx2: ['bk', [ ['phaser','Phaser',fmtPct], ['phrate','Vel. phaser',v=>(0.1+5*v).toFixed(1)+'Hz'], ['chorus','Chorus',fmtPct] ]],
   fx3: ['bk', [ ['delay','Eco',fmtPct], ['dtime','Tempo',v=>Math.round(80*Math.pow(8.75,v))+'ms'], ['dfb','Repetição',fmtPct] ]],
@@ -495,9 +595,10 @@ const KNOBS = {
 };
 const TOGGLES = {
   perc:['Percussão off','Percussão on'], percharm:['Perc 2ª harm.','Perc 3ª harm.'], percfast:['Perc lenta','Perc rápida'],
-  lfast:['Leslie lenta','Leslie rápida'], mono:['Poli','Mono']
+  lfast:['Leslie lenta','Leslie rápida'], mono:['Poli','Mono'],
+  vibc:['Scanner: vibrato','Scanner: chorus'], cphase:['Captadores fora de fase','Captadores em fase']
 };
-const TOG_PANEL = { perc:'t-organ', percharm:'t-organ', percfast:'t-organ', mono:'t-moog', lfast:'t-fx' };
+const TOG_PANEL = { perc:'t-organ', percharm:'t-organ', percfast:'t-organ', vibc:'t-organ', mono:'t-moog', lfast:'t-fx', cphase:'t-clav' };
 const DB = [ ['d0',"16'",'brown'], ['d1',"5⅓'",'brown'], ['d2',"8'",'white'], ['d3',"4'",'white'], ['d4',"2⅔'",'black'],
              ['d5',"2'",'white'], ['d6',"1⅗'",'black'], ['d7',"1⅓'",'black'], ['d8',"1'",'white'] ];
 
@@ -905,7 +1006,7 @@ function onMsg(e) {
 // ----- sequenciador: tocar, gravar, abrir e salvar .mid -----
 let audioReady = false;
 const seq = { song: null, flat: [], state: 'idle', pos: 0, m0: 0, p0: 0, tempo: 1, loop: false, idx: 0, timer: 0,
-              rec: null, recT0: 0, on: new Map(), leds: new Set() };
+              rec: null, recT0: 0, on: new Map(), leds: new Set(), queue: null, qi: 0 };
 const TGT = { A: [0], B: [1], AB: [0, 1], K: [-1], off: [] };
 const fmtT = t => { t = Math.max(0, Math.round(t)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
 
@@ -964,6 +1065,7 @@ function seqTick() {
   seq.pos = pos;
   if (seq.idx >= seq.flat.length && pos > seq.song.dur + 0.3) {
     if (seq.loop) { seq.m0 = 0; seq.p0 = performance.now(); seq.idx = 0; seq.pos = 0; seqSilence(); }
+    else if (seq.queue) { seqStop(true); seqNext(); }
     else seqStop(false);
   }
   seqUI();
@@ -1061,19 +1163,42 @@ function seqOpenFile(file) {
   r.onerror = () => lcdFlash('Não consegui ler o arquivo');
   r.readAsArrayBuffer(file);
 }
-function seqDemo() {
-  const A = PRESETS.find(p => p.id === 'org-crunch'), B = PRESETS.find(p => p.id === 'mg-sub');
+function seqLib(it, fromQueue) {
+  if (!fromQueue) seq.queue = null;
   saveCur();
-  parts[0] = partFromPreset(A); parts[0].init = true;
-  parts[1] = partFromPreset(B); parts[1].init = true;
-  pushPart(1); pushPart(0); send('part:' + curPart);
-  if (modeIdx === 0) setMode(1, true);
-  curPart = 0; send('part:0'); showPartInUI(0); lcdSummary();
-  loadSong(buildDemo());
+  parts[0] = partFromPreset(PRESETS.find(p => p.id === it.a)); parts[0].init = true;
+  if (it.vol !== undefined) parts[0].vals.volume = it.vol;
+  if (it.b) { parts[1] = partFromPreset(PRESETS.find(p => p.id === it.b)); parts[1].init = true; }
+  curPart = 0; modeIdx = it.b ? 1 : 0;
+  pushPart(1); pushPart(0); send('mode:' + modeIdx);
+  refreshZone(); showPartInUI(0); lcdSummary();
+  loadSong(it.build());
   seqPlay();
 }
+function seqNext() {
+  seq.qi++;
+  if (seq.qi >= LIBRARY.length) { seq.queue = null; lcdFlash('Fim da biblioteca'); return; }
+  setTimeout(() => { if (seq.queue) seqLib(LIBRARY[seq.qi], true); }, 1500);
+}
+function seqAll() { seq.queue = true; seq.qi = 0; seqLib(LIBRARY[0], true); }
+function seqDemo() { seqLib({ a: 'org-crunch', b: 'mg-sub', build: buildDemo }); }
+(function buildLib() {
+  const host = $('sq-lib');
+  const all = document.createElement('button');
+  all.className = 'sw panic'; all.innerHTML = '<i class="lamp"></i>Tocar todas';
+  all.addEventListener('click', seqAll);
+  host.appendChild(all);
+  LIBRARY.forEach(it => {
+    const b = document.createElement('button');
+    b.className = 'sw'; b.innerHTML = '<i class="lamp"></i><span></span>';
+    b.querySelector('span').textContent = it.title;
+    b.title = it.by;
+    b.addEventListener('click', () => seqLib(it));
+    host.appendChild(b);
+  });
+})();
 $('sq-play').addEventListener('click', seqPlay);
-$('sq-stop').addEventListener('click', () => seqStop(false));
+$('sq-stop').addEventListener('click', () => { seq.queue = null; seqStop(false); });
 $('sq-rec').addEventListener('click', () => { if (seq.state === 'rec') seqRecStop(); else seqRecStart(); });
 $('sq-open').addEventListener('click', () => $('sq-file').click());
 $('sq-file').addEventListener('change', e => { seqOpenFile(e.target.files[0]); e.target.value = ''; });

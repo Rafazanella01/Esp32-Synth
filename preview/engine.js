@@ -22,7 +22,8 @@ const PDEF = {
   tine: 0.5, bark: 0.5, rdecay: 0.5, trem: 0.3, trate: 0.4,
   osc2: 0.5, osc2mix: 0.8, sub: 0.5, fenv: 0.5, fdecay: 0.4, fsus: 0.2, glide: 0, mono: 1,
   drive: 0, leslie: 0, lfast: 0, reverb: 0.15, trim: 1,
-  phaser: 0, phrate: 0.3, chorus: 0, delay: 0, dtime: 0.4, dfb: 0.3
+  phaser: 0, phrate: 0.3, chorus: 0, delay: 0, dtime: 0.4, dfb: 0.3,
+  vib: 0, vibc: 1, cphase: 0
 };
 const G = { bend: 0.5, mod: 0, vcurve: 0.5 };      // globais de performance
 const GLOBAL_NAMES = new Set(['bend', 'mod', 'vcurve']);
@@ -53,6 +54,18 @@ function sinTurns(x) {
   const f = p - i;
   return sinT[i] + (sinT[i + 1] - sinT[i]) * f;
 }
+const twT = new Float32Array(TS + 1);
+for (let i = 0; i <= TS; i++) {
+  const a = TWO_PI * i / TS;
+  twT[i] = (Math.sin(a) + 0.02 * Math.sin(2 * a + 0.6) + 0.008 * Math.sin(3 * a + 1.1)) / 1.02;
+}
+function twTurns(x) {
+  x -= Math.floor(x);
+  const p = x * TS;
+  const i = p | 0;
+  const f = p - i;
+  return twT[i] + (twT[i + 1] - twT[i]) * f;
+}
 function fastTanh(x) {
   if (x < -3) return -1;
   if (x > 3) return 1;
@@ -79,7 +92,8 @@ function shaper(x, g, bias) { return fastTanh(g * x + bias) - fastTanh(bias); }
 function makeFx() {
   return {
     wah: { low: 0, band: 0, env: 0 },
-    drv: { xprev: 0, dc: 0, lp1: 0, lp2: 0 },
+    drv: { xprev: 0, dc: 0, lp1: 0, lp2: 0, env: 0 },
+    vib: { buf: new Float32Array(1024), i: 0, ph: 0 },
     les: { hornPh: 0, drumPh: 0, hornSp: 0.8, drumSp: 0.7, lo1: 0, lo2: 0, wi: 0,
            hornBuf: new Float32Array(2048), drumBuf: new Float32Array(2048) },
     trm: { ph: 0 },
@@ -136,7 +150,10 @@ function newVoice() {
     peak: 0, clickEnv: 0, samples: 0,
     perc: 0, kclk: 0,
     envM: 0, envT: 0, coefA: 0, coefM: 0, coefT: 0, i1: 0, i2: 0, tineAmp: 0,
-    f: 440, ft: 440, p1: 0, p2: 0, p3: 0, es: 0, fe: 1, y1: 0, y2: 0, y3: 0, y4: 0
+    f: 440, ft: 440, p1: 0, p2: 0, p3: 0, es: 0, fe: 1, y1: 0, y2: 0, y3: 0, y4: 0,
+    w1: 0, w2: 0, w3: 0, w4: 0, dr1: 0, dr2: 0,
+    phU: 0, phD: 0, thump: 0, tlp: 0, rclk: 0,
+    a1: 0, a2: 0, a3: 0, c1: 0, c2: 0, c3: 0, e1: 0, e2: 0, e3: 0, gpk: 0, th: 0, thlp: 0
   };
 }
 const voices = Array.from({ length: NV }, newVoice);
@@ -176,11 +193,13 @@ function startClav(v, note, velN) {
   mean /= n;
   for (let i = 0; i < n; i++) v.line[i] = (v.line[i] - mean) * amp * 2.5;
   v.wpos = n; v.lp = 0; v.peak = 1; v.clickEnv = velN; v.samples = 0;
+  v.thump = velN; v.tlp = 0; v.rclk = 0;
 }
 
 function startOrgan(v, note) {
   v.inc = noteFreq(note) / 2 / SR;
   v.ph = 0; v.env = 0;
+  v.phU = 0.31; v.phD = 0.77;
   v.kclk = 1;
   let others = 0;
   for (const o of voices) if (o !== v && o.part === v.part && o.stage === ON && o.eng === ENG.organ) others++;
@@ -188,23 +207,30 @@ function startOrgan(v, note) {
 }
 
 function startRhodes(v, note, velN) {
+  // modos de uma viga em balanço: 1 : 6,27 : 17,5. O captador eletromagnético vê a velocidade da tine
+  // e a distância ao ímã muda com o deslocamento, o que gera a "mordida" (harmônicas pares) ao tocar forte.
   const P = v.pp;
   const f = noteFreq(note);
   v.inc = f / SR;
-  v.ph = 0; v.env = 1; v.envM = 1; v.envT = 1;
+  v.p1 = v.p2 = v.p3 = 0;
   const t60 = Math.pow(8, P.rdecay) * Math.pow(2, -(note - 60) / 24);
-  v.coefA = Math.pow(0.001, 1 / (t60 * SR));
-  v.coefM = Math.pow(v.coefA, 2.5);
-  v.coefT = Math.pow(0.001, 1 / (0.18 * SR));
-  v.i1 = 0.25 + (0.4 + 3.0 * P.bark) * velN * velN;
-  v.i2 = 0.6 + 2.4 * velN * velN;
-  const lim = 0.42 * SR / (14 * f);
-  v.tineAmp = P.tine * 0.35 * Math.min(1, Math.max(0, (lim - 1) * 2));
+  v.c1 = Math.pow(0.001, 1 / (t60 * SR));
+  v.c2 = Math.pow(0.001, 1 / (Math.min(0.7, 0.2 * t60 + 0.1) * SR));
+  v.c3 = Math.pow(0.001, 1 / (0.09 * SR));
+  v.e1 = v.e2 = v.e3 = 1;
+  const tn = 0.4 + 1.2 * P.tine;
+  v.a1 = 0.5 * (0.35 + 0.65 * velN);
+  v.a2 = (0.012 + 0.07 * velN * velN) * tn;
+  v.a3 = (0.004 + 0.03 * velN * velN * velN) * tn;
+  if (f * 6.27 > 0.42 * SR) v.a2 = 0;
+  if (f * 17.5 > 0.42 * SR) v.a3 = 0;
+  v.gpk = 0.12 + 0.6 * P.bark * (0.3 + 0.7 * velN);
+  v.th = 0.04 * velN; v.thlp = 0;
 }
 
 function startMoog(v, note, retrigger) {
   v.ft = noteFreq(note);
-  if (!retrigger) { v.f = v.ft; v.p1 = 0; v.p2 = 0.37; v.p3 = 0; v.y1 = v.y2 = v.y3 = v.y4 = 0; }
+  if (!retrigger) { v.f = v.ft; v.p1 = 0; v.p2 = 0.37; v.p3 = 0; v.y1 = v.y2 = v.y3 = v.y4 = 0; v.w1 = v.w2 = v.w3 = v.w4 = 0; }
   v.env = retrigger ? v.env : 0;
   v.es = 0; v.fe = 1;
 }
@@ -250,6 +276,7 @@ function voiceOff(note, only = -1) {
       }
     }
     if (v.eng === ENG.rhodes && sustainDown) { v.held = true; continue; }
+    if (v.eng === ENG.clav) v.rclk = 1;
     releaseVoice(v);
   }
 }
@@ -287,7 +314,7 @@ function routeOn(n, vel, key) {
 function derive(part) {
   const P = part.P, D = part.D;
   D.cutBase = 40 * Math.pow(300, P.cutoff);
-  D.res4 = P.res * 3.8;
+  D.res4 = P.res * 4.1;
   D.atkRate = 1 / (0.002 * Math.pow(1000, P.attack) * SR);
   D.decC = 1 - expCoef(0.01 * Math.pow(300, P.decay));
   D.relC = 1 - expCoef(0.01 * Math.pow(500, P.release));
@@ -306,12 +333,17 @@ function derive(part) {
     const lv = Math.round(P['d' + i] * 8);
     D.wts[i] = lv <= 0 ? 0 : Math.pow(10, -3 * (8 - lv) / 20);
   }
+  if (P.perc > 0.5) D.wts[8] = 0;            // com a percussão ligada, o drawbar de 1' é cortado (como no órgão)
+  D.leak = 0.0018;
+  D.cphase = P.cphase > 0.5 ? 1 : 0;
+  D.thumpAmt = P.click * 0.6;
   D.percK = P.percharm > 0.5 ? 6 : 4;
   D.percCoef = expCoef(P.percfast > 0.5 ? 0.12 : 0.5);
   D.kclick = P.kclick * 0.5;
 }
 
 const clkCoef = expCoef(0.004);
+const thumpR = expCoef(0.012);
 const orgAtk = 1 / (0.004 * SR), orgRel = 1 / (0.025 * SR);
 
 function renderVoice(v, mix, D, N, pb) {
@@ -329,8 +361,10 @@ function renderVoice(v, mix, D, N, pb) {
       v.lp += v.lpc * (x1 - v.lp);
       v.line[v.wpos & LINE_MASK] = v.lp * gcur;
       v.wpos++;
-      let o = (x1 - x2) * 0.6;
+      let o = D.cphase ? (x1 + x2) * 0.45 : (x1 - x2) * 0.6;
       if (v.clickEnv > 0.001) { o += frand() * v.clickEnv * D.clickAmt; v.clickEnv *= 0.97; }
+      if (v.thump > 0.001) { v.tlp += 0.05 * (frand() - v.tlp); o += v.tlp * v.thump * D.thumpAmt * 3; v.thump *= thumpR; }
+      if (v.rclk > 0.001) { o += frand() * v.rclk * 0.06; v.rclk *= 0.96; }
       mix[n] += o;
       const a = Math.abs(o);
       v.peak = a > v.peak ? a : v.peak * 0.9995;
@@ -348,12 +382,15 @@ function renderVoice(v, mix, D, N, pb) {
       let s = 0;
       for (let i = 0; i < 9; i++) {
         const w = D.wts[i];
-        if (w > 0 && ORG_K[i] * oinc < 0.42) s += w * sinTurns(v.ph * ORG_K[i]);
+        if (w > 0 && ORG_K[i] * oinc < 0.42) s += w * twTurns(v.ph * ORG_K[i]);
       }
       if (v.perc > 0.0005) {
-        if (D.percK * oinc * 2 < 0.42) s += v.perc * 0.9 * sinTurns(v.ph * D.percK);
+        if (D.percK * oinc * 2 < 0.42) s += v.perc * 0.9 * twTurns(v.ph * D.percK);
         v.perc *= D.percCoef;
       }
+      v.phU += oinc * 1.05946; if (v.phU >= 1) v.phU -= 1;       // vazamento dos tonewheels vizinhos
+      v.phD += oinc * 0.94387; if (v.phD >= 1) v.phD -= 1;
+      s += D.leak * (sinTurns(v.phU * 2) + sinTurns(v.phD * 2));
       if (v.kclk > 0.001) { s += frand() * v.kclk * D.kclick; v.kclk *= clkCoef; }
       if (rel) { v.env -= orgRel; if (v.env <= 0) { v.env = 0; v.stage = IDLE; break; } }
       else if (v.env < 1) { v.env += orgAtk; if (v.env > 1) v.env = 1; }
@@ -364,25 +401,33 @@ function renderVoice(v, mix, D, N, pb) {
 
   if (v.eng === ENG.rhodes) {
     const dampC = rel ? Math.pow(0.001, 1 / (0.14 * SR)) : 1;
-    const amp = 0.35 + 0.65 * v.vel;
     const rinc = v.inc * pb;
     for (let n = 0; n < N; n++) {
-      v.ph += rinc;
-      if (v.ph >= 1) v.ph -= 1;
-      const body = sinTurns(v.ph + v.i1 * v.envM * sinTurns(v.ph));
-      const tine = v.tineAmp > 0 ? v.tineAmp * v.envT * sinTurns(v.ph + v.i2 * v.envT * sinTurns(v.ph * 14)) : 0;
-      mix[n] += (body + tine) * v.env * amp * 0.5;
-      v.env *= v.coefA * dampC; v.envM *= v.coefM; v.envT *= v.coefT;
+      v.p1 += rinc; v.p1 -= Math.floor(v.p1);
+      v.p2 += rinc * 6.27; v.p2 -= Math.floor(v.p2);
+      v.p3 += rinc * 17.5; v.p3 -= Math.floor(v.p3);
+      const A1 = v.a1 * v.e1, A2 = v.a2 * v.e2, A3 = v.a3 * v.e3;
+      const x = A1 * sinTurns(v.p1) + A2 * sinTurns(v.p2) + A3 * sinTurns(v.p3);
+      const vl = A1 * sinTurns(v.p1 + 0.25) + 6.27 * A2 * sinTurns(v.p2 + 0.25) + 17.5 * A3 * sinTurns(v.p3 + 0.25);
+      let d = 1 + v.gpk * x / 0.5;
+      if (d < 0.3) d = 0.3;
+      let o = vl / (d * d);
+      if (v.th > 0.0005) { v.thlp += 0.08 * (frand() - v.thlp); o += v.thlp * v.th; v.th *= thumpR; }
+      mix[n] += o;
+      v.e1 *= v.c1 * dampC; v.e2 *= v.c2 * dampC; v.e3 *= v.c3 * dampC;
     }
-    if (v.env < 0.0003) v.stage = IDLE;
+    if (v.e1 < 0.0003) v.stage = IDLE;
     return;
   }
 
   // moog
   const kt = Math.pow(v.ft / 261.63, 0.4);
+  v.dr1 += frand() * 0.4 - v.dr1 * 0.004; v.dr2 += frand() * 0.4 - v.dr2 * 0.004;   // deriva analógica lenta (centésimos de semitom)
+  v.dr1 = Math.max(-2.5, Math.min(2.5, v.dr1)); v.dr2 = Math.max(-2.5, Math.min(2.5, v.dr2));
+  const dfa = Math.pow(2, v.dr1 / 1200), dfb = Math.pow(2, v.dr2 / 1200);
   for (let n = 0; n < N; n++) {
     v.f += (v.ft - v.f) * D.glideC;
-    const inc1 = v.f * pb / SR, inc2 = inc1 * D.det, inc3 = inc1 * 0.5;
+    const inc1 = v.f * pb / SR * dfa, inc2 = v.f * pb / SR * D.det * dfb, inc3 = inc1 * 0.5;
     v.p1 += inc1; if (v.p1 >= 1) v.p1 -= 1;
     v.p2 += inc2; if (v.p2 >= 1) v.p2 -= 1;
     v.p3 += inc3; if (v.p3 >= 1) v.p3 -= 1;
@@ -396,12 +441,14 @@ function renderVoice(v, mix, D, N, pb) {
     let fc = D.cutBase * kt * Math.pow(2, D.fenvAmt * 5 * v.fe);
     const fmax = 0.17 * SR;
     if (fc > fmax) fc = fmax;
-    const g = 1 - Math.exp(-TWO_PI * fc / SR);
-    const xin = fastTanh(s - D.res4 * v.y4);
-    v.y1 += g * (xin - v.y1);
-    v.y2 += g * (v.y1 - v.y2);
-    v.y3 += g * (v.y2 - v.y3);
-    v.y4 += g * (v.y3 - v.y4);
+    const g = 1 - Math.exp(-TWO_PI * fc / (2 * SR));
+    for (let q = 0; q < 2; q++) {               // ladder de transistores: tanh em cada estágio, 2x sobreamostrado
+      const t0 = fastTanh(s - D.res4 * v.y4);
+      v.y1 += g * (t0 - v.w1); v.w1 = fastTanh(v.y1);
+      v.y2 += g * (v.w1 - v.w2); v.w2 = fastTanh(v.y2);
+      v.y3 += g * (v.w2 - v.w3); v.w3 = fastTanh(v.y3);
+      v.y4 += g * (v.w3 - v.w4); v.w4 = fastTanh(v.y4);
+    }
 
     if (rel) { v.env -= v.env * D.relC; if (v.env < 0.0005) { v.stage = IDLE; v.env = 0; break; } }
     else if (v.es === 0) { v.env += D.atkRate; if (v.env >= 1) { v.env = 1; v.es = 1; } }
@@ -428,8 +475,8 @@ function fxPart(part, N) {
   const hornTarget = P.lfast > 0.5 ? 6.7 : 0.8;
   const drumTarget = P.lfast > 0.5 ? 6.0 : 0.7;
   const dt = N / SR;
-  les.hornSp += (hornTarget - les.hornSp) * (1 - Math.exp(-dt / 0.9));
-  les.drumSp += (drumTarget - les.drumSp) * (1 - Math.exp(-dt / 3.0));
+  les.hornSp += (hornTarget - les.hornSp) * (1 - Math.exp(-dt / (hornTarget > les.hornSp ? 0.9 : 2.2)));
+  les.drumSp += (drumTarget - les.drumSp) * (1 - Math.exp(-dt / (drumTarget > les.drumSp ? 3.5 : 7.0)));
   const xoC = 1 - Math.exp(-TWO_PI * 800 / SR);
   const h0 = 0.0009 * SR, hd = 0.00035 * SR, dd = 0.00015 * SR;
 
@@ -453,6 +500,8 @@ function fxPart(part, N) {
   const ecLen = ech.l.length;
 
   const wah = f.wah, drv = f.drv, trm = f.trm;
+  const vibOn = part.engine === ENG.organ && P.vib > 0.01, vb = f.vib;
+  const vbBase = 0.0015 * SR, vbDepth = (0.00005 + 0.0002 * P.vib) * SR;
 
   for (let n = 0; n < N; n++) {
     let m = mix[n];
@@ -471,9 +520,19 @@ function fxPart(part, N) {
       m = m * (1 - wahMix) + wah.band * wq * 1.6 * wahMix;
     }
 
+    if (vibOn) {
+      vb.ph += 6.8 / SR; if (vb.ph >= 1) vb.ph -= 1;
+      vb.buf[vb.i] = m;
+      const dl = readBuf(vb.buf, vb.i, vbBase + vbDepth * Math.sin(TWO_PI * vb.ph));
+      vb.i = (vb.i + 1) & 1023;
+      m = P.vibc > 0.5 ? 0.55 * (m + dl) : dl;
+    }
+
     if (drive > 0.001) {
+      drv.env += (Math.abs(m) - drv.env) * 0.0008;
+      const dgS = dg / (1 + 6 * drive * drv.env);     // sag da fonte: o ganho cai quando toca forte e por muito tempo
       const mid = 0.5 * (drv.xprev + m);
-      let y = 0.5 * (shaper(mid, dg, bias) + shaper(m, dg, bias));
+      let y = 0.5 * (shaper(mid, dgS, bias) + shaper(m, dgS, bias));
       drv.xprev = m;
       drv.dc += dcC * (y - drv.dc);
       y -= drv.dc;

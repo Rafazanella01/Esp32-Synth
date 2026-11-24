@@ -81,6 +81,7 @@ desligue e ligue o cabo e recarregue a página. Em Linux, `aconnect -l` lista os
 - **Tocar:** o andamento do arquivo é respeitado. A velocidade vai de 25% a 200%.
 - **Gravar:** `Gravar`, toque, `Gravar` de novo. A gravação vira uma faixa tocável e pode ser salva.
 - **Salvar:** gera um `.mid` de uma faixa só, a 120 BPM, com as notas, a velocity e o pedal. Se você salvar um arquivo que abriu, as faixas são juntas numa só (as desligadas ficam de fora).
+- **Biblioteca (domínio público):** botões para Ode à Alegria (Beethoven), Parabéns pra Você, Jingle Bells (refrão), Canon em Ré (trecho, Pachelbel) e a abertura da Tocata e Fuga em Ré menor (Bach). Cada uma carrega os instrumentos nas partes A e B e já começa a tocar. `Tocar todas` toca as cinco em sequência (`Parar` cancela). Foram escritas de memória: as notas e os compassos foram conferidos por teste, mas a harmonização, o baixo e a Tocata são interpretações aproximadas.
 - **Demo original:** uma peça curta que escrevi (mi menor, 150 BPM, órgão e baixo), só para testar o tocador. Não é cópia de nenhuma música.
 - **Para tocar uma música sua** (por exemplo Highway Star do Deep Purple), carregue o seu próprio arquivo `.mid` da música. O repositório não traz transcrições de músicas protegidas.
 
@@ -134,6 +135,24 @@ Página para o motor: `part:<0|1>` escolhe a parte; `e:<instrumento>` e `p:<par�
 `on:<nota>:<vel>`, `off:<nota>`, `tr:<semitons>`, `panic`;
 agendados (o último número é o atraso em ms a partir do recebimento): `son:<parte|-1>:<nota>:<vel>:<ms>`, `soff:<parte|-1>:<nota>:<ms>`, `ssus:<0|1>:<ms>`; `sclear` cancela os agendados (`-1` segue o modo do teclado).
 Motor para a página: `v:<nívelL>:<nívelR>` (vúmetro), `a:1` (atividade MIDI), `s:<0|1>` (pedal), `k:<nota>:<vel>` (tecla do piano; vel 0 = solta).
+
+## Modelos dos instrumentos (o que é circuito e o que é aproximação)
+
+O som vem de modelos dos circuitos e da física de cada instrumento, não de amostras. Cada ponto abaixo foi medido
+com testes offline; nenhum foi comparado com gravação do instrumento real.
+
+- **Órgão de tonewheels:** onda do tonewheel com 2ª e 3ª harmônicas pequenas (-34 e -41 dB), vazamento dos tonewheels vizinhos (-55 dB),
+  key click, percussão de disparo único que corta o drawbar de 1', **scanner de vibrato/chorus** (6,8 Hz, até ±18 cents),
+  pré-amplificador de válvula com saturação assimétrica e sag da fonte, e **Leslie** com rotores que aceleram rápido e freiam devagar
+  (corneta e tambor com inércias diferentes). A afinação dos tonewheels é temperada exata; a real tem pequenos desvios das engrenagens, não modelados.
+- **Piano elétrico:** três modos de vibração da tine (1 : 6,27 : 17,5, como uma viga em balanço) e **captador eletromagnético**
+  que vê a velocidade da tine e muda de ganho com a distância ao ímã. Quanto mais forte a tecla, mais "mordida"
+  (2ª harmônica de -19 dB a -8 dB), e o "sino" agudo some em menos de 0,6 s. Mais baque do martelo. A tine real tem
+  inharmonicidade própria por nota que não está modelada.
+- **Moog:** filtro ladder de 4 estágios com saturação (tanh) em cada estágio e sobreamostragem 2x (-30 dB/oitava medido, ressonância +12 dB),
+  osciladores anti-aliasing com deriva lenta de até ±2,5 cents.
+- **Clavinet:** corda por Karplus-Strong com perdas do laço compensadas, captadores em fase ou fora de fase,
+  baque do martelo e clique do abafador. Não modela o ruído mecânico do instrumento nem as chaves de timbre do D6.
 
 ## Ligações do DAC (PCM5102A)
 

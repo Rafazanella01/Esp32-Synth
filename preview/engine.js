@@ -236,10 +236,11 @@ function voiceOn(pi, note, vel) {
 
 function releaseVoice(v) { v.stage = REL; v.held = false; }
 
-function voiceOff(note) {
-  for (const h of held) { const i = h.indexOf(note); if (i >= 0) h.splice(i, 1); }
+function voiceOff(note, only = -1) {
+  for (let hi = 0; hi < 2; hi++) { if (only >= 0 && hi !== only) continue; const h = held[hi]; const i = h.indexOf(note); if (i >= 0) h.splice(i, 1); }
   for (const v of voices) {
     if (v.stage !== ON || v.note !== note) continue;
+    if (only >= 0 && v.part !== only) continue;
     if (v.eng === ENG.moog && v.pp.mono > 0.5) {
       const h = held[v.part];
       if (h.length) {
@@ -256,6 +257,24 @@ function voiceOff(note) {
 function setSustain(down) {
   sustainDown = down;
   if (!down) for (const v of voices) if (v.stage === ON && v.held) releaseVoice(v);
+}
+
+// ---------- eventos agendados (sequenciador): chegam com um atraso em ms relativo ao recebimento ----------
+const sched = [];
+function applySched(ev) {
+  if (ev.k === 'on') {
+    if (ev.part < 0) {
+      const n = Math.min(127, Math.max(0, ev.n + transpose));
+      tmap.set(ev.n, n);
+      routeOn(n, ev.v, ev.n);
+    } else voiceOn(ev.part, ev.n, ev.v);
+  } else if (ev.k === 'off') {
+    if (ev.part < 0) {
+      const n = tmap.has(ev.n) ? tmap.get(ev.n) : ev.n;
+      tmap.delete(ev.n);
+      voiceOff(n);
+    } else voiceOff(ev.n, ev.part);
+  } else if (ev.k === 'sus') setSustain(!!ev.v);
 }
 
 function routeOn(n, vel, key) {
@@ -601,10 +620,15 @@ class SynthProcessor extends AudioWorkletProcessor {
         tmap.delete(m.n);
         voiceOff(n);
       } else if (m.t === 'sus') setSustain(!!m.v);
+      else if (m.t === 'sclear') sched.length = 0;
+      else if (m.t === 'sq') {
+        sched.push({ at: currentFrame + Math.round(Math.max(0, m.ms) * SR / 1000), k: m.k, part: m.part, n: m.n, v: m.v });
+        sched.sort((a, b) => a.at - b.at);
+      }
       else if (m.t === 'tr') transpose = Math.max(-24, Math.min(24, m.v | 0));
       else if (m.t === 'panic') {
         for (const v of voices) { v.stage = IDLE; v.held = false; }
-        held[0].length = 0; held[1].length = 0; tmap.clear(); setSustain(false);
+        held[0].length = 0; held[1].length = 0; tmap.clear(); sched.length = 0; setSustain(false);
       }
     };
     this.blocks = 0;
@@ -612,6 +636,7 @@ class SynthProcessor extends AudioWorkletProcessor {
   process(inputs, outputs) {
     const ch = outputs[0];
     const N = ch[0].length;
+    while (sched.length && sched[0].at < currentFrame + N) applySched(sched.shift());
     const lv = renderBlock(ch[0], ch[1] || ch[0], N);
     if (++this.blocks % 4 === 0) this.port.postMessage({ t: 'lv', l: lv[0], r: lv[1] });
     return true;

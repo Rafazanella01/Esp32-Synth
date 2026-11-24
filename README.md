@@ -65,6 +65,7 @@ desligue e ligue o cabo e recarregue a página. Em Linux, `aconnect -l` lista os
 
 | Onde | O que faz |
 |---|---|
+| **Sequenciador** | `Abrir .mid` carrega um arquivo; `Tocar`/`Pausar`/`Parar`; clique na barra para pular; `−`/`+` mudam o andamento (25% a 200%); `Repetir` faz laço; `Gravar` grava o que você toca (tela, teclado do computador ou piano) e `Salvar .mid` exporta. Cada faixa do arquivo pode ir para Teclado (segue o modo atual), Parte A, Parte B, A + B ou ficar desligada. |
 | **Teclado e partes** | Escolha *Normal*, *Camada* ou *Dividido*. Em *Dividido*, `−` e `+` movem o ponto de divisão (a divisão vale pela tecla que você aperta, mesmo com transposição). `Parte A` e `Parte B` escolhem qual parte os programas e knobs estão editando. Ao ligar a Camada ou o Divisão pela primeira vez, a parte B começa com um programa sugerido (Piano elétrico, ou Órgão se a A já for piano). |
 | **Programas** | 17 presets (Hammond, Clavinet, Piano elétrico, Moog). Escolher um troca o instrumento da parte que está sendo editada. |
 | **Memórias** | `Gravar` e depois `M1` a `M8` guarda **tudo**: modo, ponto de divisão e as duas partes. `M1` a `M8` sozinho chama. Ficam no navegador (`localStorage`), por aparelho. Memórias gravadas na versão anterior (só uma parte) não são lidas. |
@@ -72,6 +73,18 @@ desligue e ligue o cabo e recarregue a página. Em Linux, `aconnect -l` lista os
 | **Efeitos** | Drive, Leslie (botão troca lenta/rápida), phaser, chorus, eco de fita, reverb, volume. |
 | **Performance** | Roda de pitch (±2 semitons, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, `Panic`. |
 | Visor | Mostra o programa e, por 1,4 s, o valor do knob que você mexe. |
+
+### Arquivos MIDI
+
+- **Abrir:** `Abrir .mid` (formatos 0 e 1; até 3 MB). Lê notas, velocity, pedal sustain e mudanças de andamento. Ignora troca de programa, pitch bend e controladores: o instrumento de cada faixa é o que você escolher nas partes A e B, não o que o arquivo pede.
+  A faixa de percussão (canal 10) vem desligada, porque o painel não tem bateria.
+- **Tocar:** o andamento do arquivo é respeitado. A velocidade vai de 25% a 200%.
+- **Gravar:** `Gravar`, toque, `Gravar` de novo. A gravação vira uma faixa tocável e pode ser salva.
+- **Salvar:** gera um `.mid` de uma faixa só, a 120 BPM, com as notas, a velocity e o pedal. Se você salvar um arquivo que abriu, as faixas são juntas numa só (as desligadas ficam de fora).
+- **Demo original:** uma peça curta que escrevi (mi menor, 150 BPM, órgão e baixo), só para testar o tocador. Não é cópia de nenhuma música.
+- **Para tocar uma música sua** (por exemplo Highway Star do Deep Purple), carregue o seu próprio arquivo `.mid` da música. O repositório não traz transcrições de músicas protegidas.
+
+O tocador roda na página e agenda cada nota com 120 ms de antecedência, com tempo exato no motor. No ESP32 isso precisa virar um sequenciador dentro do firmware: mandar nota por nota por Wi-Fi tem jitter demais.
 
 ### Se você mudar a interface
 
@@ -107,6 +120,7 @@ do motor antigo. A porta do motor novo para C++ é a próxima etapa.
 - **Instrumentos:** Hammond (9 drawbars, percussão, key click), Clavinet (corda, captador, wah), piano elétrico FM (tine, bark), Moog (ladder 4 polos, glide, mono).
 - **Efeitos:** drive de válvula, Leslie (rotor lento/rápido), phaser, chorus, eco de fita, reverb, tremolo estéreo.
 - **Duas partes (A e B) e modos de teclado:** *Normal* (só A), *Camada* (A e B tocam juntas) e *Dividido* (A abaixo do ponto de divisão, B a partir dele; a marca vermelha no teclado da tela mostra o ponto). Cada parte tem instrumento, ajustes e efeitos próprios; só o reverb é compartilhado.
+- **Sequenciador de arquivos MIDI:** abre e toca `.mid`, grava o que você toca e salva em `.mid`. Veja a seção abaixo.
 - **Performance** (o CDP-160S não tem): roda de pitch (±2 st, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, panic.
 - **Memórias:** 8 posições suas, gravadas no navegador (`localStorage`). `GRAVAR` + `M1..M8` grava, `M1..M8` chama.
 - **Vúmetros e lâmpadas:** nível L/R, link, áudio, MIDI, pedal.
@@ -117,8 +131,9 @@ Os presets são aproximações do caráter de cada instrumento, não cópias de 
 
 Página para o motor: `part:<0|1>` escolhe a parte; `e:<instrumento>` e `p:<parâmetro>:<0..1>` valem para a parte escolhida
 (`bend`, `mod` e `vcurve` são globais); `mode:<0|1|2>` (normal, camada, dividido); `split:<nota>`;
-`on:<nota>:<vel>`, `off:<nota>`, `tr:<semitons>`, `panic`.
-Motor para a página: `v:<nívelL>:<nívelR>` (vúmetro), `a:1` (atividade MIDI), `s:<0|1>` (pedal).
+`on:<nota>:<vel>`, `off:<nota>`, `tr:<semitons>`, `panic`;
+agendados (o último número é o atraso em ms a partir do recebimento): `son:<parte|-1>:<nota>:<vel>:<ms>`, `soff:<parte|-1>:<nota>:<ms>`, `ssus:<0|1>:<ms>`; `sclear` cancela os agendados (`-1` segue o modo do teclado).
+Motor para a página: `v:<nívelL>:<nívelR>` (vúmetro), `a:1` (atividade MIDI), `s:<0|1>` (pedal), `k:<nota>:<vel>` (tecla do piano; vel 0 = solta).
 
 ## Ligações do DAC (PCM5102A)
 

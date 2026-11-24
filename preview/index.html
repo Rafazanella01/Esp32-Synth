@@ -147,6 +147,14 @@
   .key.down { background:linear-gradient(180deg,#d8ccaa,#c4b88f); }
   .key.blk.down { background:linear-gradient(180deg,#2a2a2a,#000); }
 
+  .sqinfo { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:14px; }
+  #sq-bar { flex:1; min-width:140px; height:12px; background:#080807; border-radius:3px; box-shadow: inset 0 0 0 1px #000, inset 0 2px 4px #000; position:relative; cursor:pointer; }
+  #sq-bar i { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,#b36d12,var(--amber)); border-radius:3px; box-shadow:0 0 6px rgba(255,170,40,.5); }
+  .sqname { margin-top:12px; font-family:var(--mono); font-size:12px; color:var(--amber); text-shadow:0 0 5px rgba(255,170,40,.4); min-height:16px; }
+  .trk { display:flex; align-items:center; gap:10px; padding:7px 10px; margin-top:6px; background:#161513; border-radius:3px; box-shadow: inset 0 0 0 1px #000; font-size:12px; }
+  .trk b { flex:1; font-weight:600; letter-spacing:.06em; text-transform:uppercase; font-size:10.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .trk span { color:var(--dim); font-family:var(--mono); font-size:11px; }
+  .trk select { background:#2a2926; color:var(--cream); border:1px solid #4a4943; border-radius:3px; padding:4px 6px; font-family:var(--label); font-size:12px; touch-action:manipulation; }
   .key.split { box-shadow: inset 3px 0 0 var(--red), 0 2px 3px rgba(0,0,0,.45); }
   .key.blk.split { box-shadow: inset 3px 0 0 var(--red), 0 3px 4px rgba(0,0,0,.7); }
 
@@ -214,6 +222,26 @@
   <div class="knobs" id="k-fx3" style="grid-template-columns:repeat(auto-fit,minmax(90px,140px))"></div>
   <div class="cap-lbl" style="margin-top:16px">Sala e saída</div>
   <div class="knobs" id="k-fx4" style="grid-template-columns:repeat(auto-fit,minmax(90px,140px))"></div>
+</div>
+
+<div class="pnl"><h2>Sequenciador · arquivos MIDI</h2>
+  <div class="rowsw" style="margin-top:0">
+    <button class="sw panic" id="sq-rec"><i class="lamp"></i>Gravar</button>
+    <button class="sw dk" id="sq-play"><i class="lamp"></i>Tocar</button>
+    <button class="sw dk" id="sq-stop">Parar</button>
+    <button class="sw" id="sq-open">Abrir .mid</button>
+    <button class="sw" id="sq-save">Salvar .mid</button>
+    <button class="sw" id="sq-demo">Demo original</button>
+    <input type="file" id="sq-file" accept=".mid,.midi,audio/midi,audio/x-midi" style="display:none">
+  </div>
+  <div class="sqinfo">
+    <div class="segd" id="sq-time" style="min-width:128px;font-size:16px">00:00 / 00:00</div>
+    <div id="sq-bar"><i></i></div>
+    <div class="segbox"><button class="sw dk" id="tp-">−</button><div class="segd" id="sq-tempo" style="font-size:16px">100%</div><button class="sw dk" id="tp+">+</button></div>
+    <button class="sw dk" id="sq-loop"><i class="lamp"></i>Repetir</button>
+  </div>
+  <div class="sqname" id="sq-name">Nenhum arquivo. Abra um .mid, toque a demo ou grave o que você tocar.</div>
+  <div id="sq-tracks"></div>
 </div>
 
 <div class="pnl"><h2>Performance</h2>
@@ -309,6 +337,139 @@ const PRESETS = [
 ];
 /*PRESETS_END*/
 const PERF = { bend:.5, mod:0, vcurve:.5 };
+
+/*MIDI_BEGIN*/
+function parseMidi(buf) {
+  const d = new DataView(buf);
+  let p = 0;
+  const need = n => { if (p + n > d.byteLength) throw new Error('Arquivo MIDI cortado ou inválido'); };
+  const u8 = () => { need(1); return d.getUint8(p++); };
+  const u16 = () => { need(2); const v = d.getUint16(p); p += 2; return v; };
+  const u32 = () => { need(4); const v = d.getUint32(p); p += 4; return v; };
+  const tag = () => { need(4); let t = ''; for (let i = 0; i < 4; i++) t += String.fromCharCode(d.getUint8(p++)); return t; };
+  const vlq = () => { let v = 0; for (let i = 0; i < 4; i++) { const b = u8(); v = (v << 7) | (b & 0x7f); if (!(b & 0x80)) return v; } throw new Error('Arquivo MIDI inválido'); };
+  if (buf.byteLength < 14 || tag() !== 'MThd') throw new Error('Isso não é um arquivo MIDI');
+  const hl = u32(); u16(); const ntr = u16(); const div = u16();
+  if (div & 0x8000) throw new Error('Tempo em SMPTE não é suportado');
+  if (div === 0) throw new Error('Arquivo MIDI inválido');
+  p = 8 + hl;
+  const tempos = [{ tick: 0, us: 500000 }];
+  const tracks = [];
+  while (p + 8 <= d.byteLength && tracks.length < ntr) {
+    const id = tag(), len = u32();
+    const end = Math.min(p + len, d.byteLength);
+    if (id !== 'MTrk') { p = end; continue; }
+    let tick = 0, run = 0, name = '';
+    const ev = [];
+    while (p < end) {
+      tick += vlq();
+      let st = u8();
+      if (st < 0x80) { if (!run) throw new Error('Arquivo MIDI inválido'); p--; st = run; }
+      else if (st < 0xF0) run = st;
+      if (st === 0xFF) {
+        run = 0;
+        const type = u8(), l = vlq(); need(l);
+        if (type === 0x51 && l === 3) tempos.push({ tick, us: (d.getUint8(p) << 16) | (d.getUint8(p + 1) << 8) | d.getUint8(p + 2) });
+        else if (type === 0x03) { name = ''; for (let i = 0; i < l; i++) name += String.fromCharCode(d.getUint8(p + i)); }
+        p += l;
+        if (type === 0x2F) break;
+      } else if (st === 0xF0 || st === 0xF7) {
+        run = 0;
+        const l = vlq(); need(l); p += l;
+      } else {
+        const c = st & 0xF0, ch = st & 0x0F;
+        const a = u8(), b = (c === 0xC0 || c === 0xD0) ? 0 : u8();
+        if (c === 0x90 && b > 0) ev.push({ tick, k: 'on', n: a, v: b, ch });
+        else if (c === 0x80 || c === 0x90) ev.push({ tick, k: 'off', n: a, ch });
+        else if (c === 0xB0 && a === 64) ev.push({ tick, k: 'sus', v: b >= 64 ? 1 : 0, ch });
+      }
+    }
+    p = end;
+    tracks.push({ name, ev });
+  }
+  tempos.sort((x, y) => x.tick - y.tick);
+  const segs = [];
+  let sec = 0;
+  tempos.forEach((t, i) => {
+    if (i > 0) sec += (t.tick - tempos[i - 1].tick) * tempos[i - 1].us / 1e6 / div;
+    segs.push({ tick: t.tick, us: t.us, sec });
+  });
+  const toSec = tk => {
+    let i = segs.length - 1;
+    while (i > 0 && segs[i].tick > tk) i--;
+    return segs[i].sec + (tk - segs[i].tick) * segs[i].us / 1e6 / div;
+  };
+  let dur = 0;
+  const out = tracks.map(tr => {
+    const events = tr.ev.map(e => { const t = toSec(e.tick); if (t > dur) dur = t; return { t, k: e.k, n: e.n, v: e.v, ch: e.ch }; });
+    return { name: tr.name, events };
+  });
+  return { tracks: out, dur };
+}
+
+function writeMidi(events, title) {
+  const T = 960;                         // 120 BPM, 480 ticks por semínima
+  const body = [];
+  const vl = n => { const b = [n & 0x7f]; while ((n >>= 7)) b.unshift((n & 0x7f) | 0x80); return b; };
+  const nm = Array.from(String(title || 'Performance').replace(/[^\x20-\x7e]/g, '?').slice(0, 60)).map(c => c.charCodeAt(0));
+  body.push(0, 0xFF, 0x03, nm.length, ...nm);
+  body.push(0, 0xFF, 0x51, 3, 0x07, 0xA1, 0x20);
+  let last = 0;
+  const evs = events.slice().sort((a, b) => a.t - b.t);
+  for (const e of evs) {
+    const tick = Math.max(last, Math.round(e.t * T));
+    body.push(...vl(tick - last)); last = tick;
+    if (e.k === 'on') body.push(0x90, e.n & 127, Math.max(1, Math.min(127, e.v | 0)));
+    else if (e.k === 'off') body.push(0x80, e.n & 127, 64);
+    else body.push(0xB0, 64, e.v ? 127 : 0);
+  }
+  body.push(0, 0xFF, 0x2F, 0);
+  const head = [0x4D,0x54,0x68,0x64, 0,0,0,6, 0,0, 0,1, 0x01,0xE0, 0x4D,0x54,0x72,0x6B,
+    (body.length >>> 24) & 255, (body.length >>> 16) & 255, (body.length >>> 8) & 255, body.length & 255];
+  return new Uint8Array(head.concat(body));
+}
+
+function toSong(parsed, name) {
+  const tracks = [];
+  parsed.tracks.forEach((tr, i) => {
+    const notes = tr.events.filter(e => e.k === 'on').length;
+    if (!notes) return;
+    const drums = tr.events.some(e => e.ch === 9);
+    tracks.push({ name: tr.name || ('Faixa ' + (i + 1)), notes, map: drums ? 'off' : 'K',
+      events: tr.events.map(e => ({ t: e.t, k: e.k, n: e.n, v: e.v })) });
+  });
+  if (!tracks.length) throw new Error('O arquivo não tem notas');
+  return { name, tracks, dur: parsed.dur };
+}
+
+function buildDemo() {
+  // peça original em mi menor, 150 BPM, 16 compassos: órgão (faixa 1) e baixo (faixa 2)
+  const beat = 0.4, e8 = beat / 2, e16 = beat / 4, bar = beat * 4;
+  const prog = ['Em','Em','C','D','Em','Em','C','D','Em','G','C','D','Em','G','D','B'];
+  const voic = { Em:[52,55,59,64], C:[52,55,60,64], D:[54,57,62,66], G:[50,55,59,62], B:[51,54,59,63] };
+  const root = { Em:40, C:36, D:38, G:43, B:35 };
+  const pent = [64,67,69,71,74,76,79];
+  const stab = [1,0,1,1,0,1,0,1];
+  const org = [], bass = [];
+  const add = (arr, t, n, len, v) => { arr.push({ t, k: 'on', n, v }); arr.push({ t: t + len, k: 'off', n }); };
+  prog.forEach((ch, b) => {
+    const t0 = b * bar;
+    stab.forEach((on, i) => { if (on) voic[ch].forEach(n => add(org, t0 + i * e8, n, e8 * 0.9, 100)); });
+    for (let i = 0; i < 8; i++) add(bass, t0 + i * e8, root[ch] + ((i % 4 === 2) ? 12 : 0), e8 * 0.85, i % 2 ? 80 : 105);
+    if (b >= 8) {
+      for (let i = 0; i < 8; i++) {
+        const idx = (b + (i < 4 ? i : 7 - i)) % 7;
+        add(org, t0 + beat * 2 + i * e16 * 2 / 2 * 1, pent[idx] + 12, e16 * 0.9, 100);
+      }
+    }
+  });
+  org.sort((a, b) => a.t - b.t); bass.sort((a, b) => a.t - b.t);
+  return { name: 'Demo original (órgão rock)', dur: prog.length * bar + 0.5, tracks: [
+    { name: 'Órgão', notes: org.filter(e => e.k === 'on').length, map: 'A', events: org },
+    { name: 'Baixo', notes: bass.filter(e => e.k === 'on').length, map: 'B', events: bass } ] };
+}
+/*MIDI_END*/
+
 
 const ENGNAME = { organ:'Órgão de tonewheels', clav:'Clavinet', rhodes:'Piano elétrico', moog:'Sintetizador analógico' };
 const fmtPct = v => Math.round(v*100)+'%';
@@ -481,6 +642,7 @@ function setTranspose(n) {
 $('tr-').addEventListener('click', () => setTranspose(trVal - 1));
 $('tr+').addEventListener('click', () => setTranspose(trVal + 1));
 $('panic').addEventListener('click', () => {
+  seqStop(true);
   send('panic');
   document.querySelectorAll('.key.down').forEach(k => k.classList.remove('down'));
   lcdFlash('Todas as notas desligadas');
@@ -687,8 +849,8 @@ function vuTarget(lv) {
 let kbBase = 48;
 const kb = $('kb');
 const isBlack = n => [1,3,6,8,10].includes(n % 12);
-function noteOn(n, vel) { send('on:' + n + ':' + (vel || 100)); lamp('lpMidi', true, 120); }
-function noteOff(n) { send('off:' + n); }
+function noteOn(n, vel) { send('on:' + n + ':' + (vel || 100)); lamp('lpMidi', true, 120); recEvent('on', n, vel || 100); }
+function noteOff(n) { send('off:' + n); recEvent('off', n); }
 function buildKeys() {
   kb.innerHTML = '';
   $('octl').textContent = 'C' + (Math.floor(kbBase / 12) - 1) + ' a C' + (Math.floor(kbBase / 12) + 1);
@@ -731,13 +893,197 @@ function onMsg(e) {
   const a = String(e.data).split(':');
   if (a[0] === 'v') { vu.L.t = Math.max(vu.L.t, vuTarget(parseFloat(a[1]))); vu.R.t = Math.max(vu.R.t, vuTarget(parseFloat(a[2]))); }
   else if (a[0] === 'a') lamp('lpMidi', true, 120);
-  else if (a[0] === 's') lamp('lpPed', a[1] === '1');
+  else if (a[0] === 'k') { const n = parseInt(a[1]), v = parseInt(a[2]); ledKey(n, v > 0); recEvent(v > 0 ? 'on' : 'off', n, v); }
+  else if (a[0] === 's') { lamp('lpPed', a[1] === '1'); recEvent('sus', 0, a[1] === '1' ? 1 : 0); }
   else if (a[0] === 'i') {
-    if (a[1] === 'audio') lamp('lpAudio', true);
+    if (a[1] === 'audio') { lamp('lpAudio', true); audioReady = true; }
     if (a[1] === 'lat') { const ms = parseFloat(a[2]); $('lpAudio').lastChild.textContent = 'Áudio ' + (ms > 0 ? Math.round(ms) + ' ms' : ''); lcdFlash(ms > 0 ? 'Latência de áudio ~' + ms.toFixed(0) + ' ms · ' + a[3] + ' Hz' : 'Latência: o navegador não informa'); }
     if (a[1] === 'midi') { midiOn = a.slice(2).join(':').length > 0; lcdFlash(midiOn ? 'Piano MIDI conectado' : 'Sem piano MIDI'); }
   }
 }
+
+// ----- sequenciador: tocar, gravar, abrir e salvar .mid -----
+let audioReady = false;
+const seq = { song: null, flat: [], state: 'idle', pos: 0, m0: 0, p0: 0, tempo: 1, loop: false, idx: 0, timer: 0,
+              rec: null, recT0: 0, on: new Map(), leds: new Set() };
+const TGT = { A: [0], B: [1], AB: [0, 1], K: [-1], off: [] };
+const fmtT = t => { t = Math.max(0, Math.round(t)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+
+function ledKey(n, on) {
+  const k = kb.querySelector('.key[data-n="' + n + '"]');
+  if (k) { k.classList.toggle('down', on); if (on) seq.leds.add(n); else seq.leds.delete(n); }
+}
+function recEvent(k, n, v) {
+  if (seq.state !== 'rec') return;
+  seq.rec.push({ t: (performance.now() - seq.recT0) / 1000, k, n, v });
+}
+
+function seqUI() {
+  const dur = seq.song ? seq.song.dur : 0;
+  $('sq-time').textContent = fmtT(seq.pos) + ' / ' + fmtT(dur);
+  $('sq-bar').firstElementChild.style.width = (dur ? Math.min(100, seq.pos / dur * 100) : 0) + '%';
+  $('sq-tempo').textContent = Math.round(seq.tempo * 100) + '%';
+  $('sq-play').classList.toggle('on', seq.state === 'play');
+  $('sq-rec').classList.toggle('on', seq.state === 'rec');
+  $('sq-loop').classList.toggle('on', seq.loop);
+  $('sq-play').lastChild.textContent = seq.state === 'play' ? 'Pausar' : 'Tocar';
+}
+function seqPos() {
+  return seq.state === 'play' ? seq.m0 + (performance.now() - seq.p0) / 1000 * seq.tempo : seq.pos;
+}
+function seqSilence() {
+  send('sclear');
+  for (const { part, n } of seq.on.values()) send('soff:' + part + ':' + n + ':0');
+  seq.on.clear();
+  send('ssus:0:0');
+  for (const n of [...seq.leds]) ledKey(n, false);
+}
+function seqSend(e, ms) {
+  const tr = seq.song.tracks[e.tr];
+  for (const part of TGT[tr.map] || []) {
+    const key = part + ':' + e.n;
+    if (e.k === 'on') {
+      send('son:' + part + ':' + e.n + ':' + e.v + ':' + ms.toFixed(1));
+      const prev = seq.on.get(key);
+      seq.on.set(key, { part, n: e.n, c: (prev ? prev.c : 0) + 1 });
+      setTimeout(() => { if (seq.state === 'play') ledKey(e.n, true); }, ms);
+    } else if (e.k === 'off') {
+      send('soff:' + part + ':' + e.n + ':' + ms.toFixed(1));
+      // só tira da lista quando o off de fato já valeu; se cancelar antes, o soff de segurança ainda sai
+      setTimeout(() => { const r = seq.on.get(key); if (r && --r.c <= 0) seq.on.delete(key); ledKey(e.n, false); }, ms + 20);
+    } else send('ssus:' + e.v + ':' + ms.toFixed(1));
+  }
+}
+function seqFirstIdx(t) { let i = 0; while (i < seq.flat.length && seq.flat[i].t < t) i++; return i; }
+function seqTick() {
+  const pos = seqPos(), look = 0.12 * seq.tempo;
+  while (seq.idx < seq.flat.length && seq.flat[seq.idx].t <= pos + look) {
+    const e = seq.flat[seq.idx++];
+    seqSend(e, Math.max(0, (e.t - pos) / seq.tempo * 1000));
+  }
+  seq.pos = pos;
+  if (seq.idx >= seq.flat.length && pos > seq.song.dur + 0.3) {
+    if (seq.loop) { seq.m0 = 0; seq.p0 = performance.now(); seq.idx = 0; seq.pos = 0; seqSilence(); }
+    else seqStop(false);
+  }
+  seqUI();
+}
+function seqPlay() {
+  if (!seq.song) { lcdFlash('Nada para tocar'); return; }
+  if (seq.state === 'rec') seqRecStop();
+  if (seq.state === 'play') { seqPause(); return; }
+  if (window.__previewShim && !audioReady) { lcdFlash('Ligando o áudio…'); setTimeout(seqPlay, 350); return; }
+  if (seq.pos >= seq.song.dur) seq.pos = 0;
+  seq.idx = seqFirstIdx(seq.pos);
+  seq.m0 = seq.pos; seq.p0 = performance.now(); seq.state = 'play';
+  clearInterval(seq.timer); seq.timer = setInterval(seqTick, 25);
+  seqTick();
+}
+function seqPause() {
+  seq.pos = seqPos(); seq.state = 'idle';
+  clearInterval(seq.timer); seqSilence(); seqUI();
+}
+function seqStop(quiet) {
+  clearInterval(seq.timer);
+  if (seq.state === 'rec') { seq.state = 'idle'; }
+  seq.state = 'idle'; seq.pos = 0; seq.idx = 0;
+  seqSilence(); seqUI();
+  if (!quiet) lcdFlash('Parado');
+}
+function seqSeek(frac) {
+  if (!seq.song) return;
+  const t = Math.max(0, Math.min(1, frac)) * seq.song.dur;
+  if (seq.state === 'play') { seqSilence(); seq.m0 = t; seq.p0 = performance.now(); seq.idx = seqFirstIdx(t); }
+  seq.pos = t; seqUI();
+}
+function loadSong(song) {
+  seqStop(true);
+  seq.song = song;
+  seq.flat = [];
+  song.tracks.forEach((tr, i) => tr.events.forEach(e => seq.flat.push({ t: e.t, k: e.k, n: e.n, v: e.v, tr: i })));
+  seq.flat.sort((a, b) => a.t - b.t);
+  $('sq-name').textContent = song.name + ' · ' + fmtT(song.dur) + ' · ' + song.tracks.length + (song.tracks.length === 1 ? ' faixa' : ' faixas');
+  const host = $('sq-tracks'); host.innerHTML = '';
+  song.tracks.forEach(tr => {
+    const row = document.createElement('div'); row.className = 'trk';
+    row.innerHTML = '<b></b><span></span><select><option value="K">Teclado (modo atual)</option><option value="A">Parte A</option><option value="B">Parte B</option><option value="AB">A + B</option><option value="off">Desligada</option></select>';
+    row.querySelector('b').textContent = tr.name;
+    row.querySelector('span').textContent = tr.notes + ' notas';
+    const sel = row.querySelector('select'); sel.value = tr.map;
+    sel.addEventListener('change', () => { tr.map = sel.value; seqSilence(); if (seq.state === 'play') seq.idx = seqFirstIdx(seqPos()); });
+    host.appendChild(row);
+  });
+  seq.pos = 0; seqUI();
+}
+function seqRecStart() {
+  if (seq.state === 'play') seqPause();
+  seq.rec = []; seq.recT0 = performance.now(); seq.state = 'rec';
+  lcdFlash('Gravando: toque agora'); seqUI();
+}
+function seqRecStop() {
+  const rec = seq.rec || [];
+  seq.state = 'idle';
+  if (!rec.some(e => e.k === 'on')) { seqUI(); lcdFlash('Nada foi tocado'); return; }
+  const end = (performance.now() - seq.recT0) / 1000;
+  const open = {};
+  for (const e of rec) if (e.k === 'on') open[e.n] = true; else if (e.k === 'off') delete open[e.n];
+  for (const n in open) rec.push({ t: end, k: 'off', n: parseInt(n) });
+  const t0 = Math.max(0, rec[0].t - 0.15);
+  const events = rec.map(e => ({ t: e.t - t0, k: e.k, n: e.n, v: e.v }));
+  const d = new Date();
+  loadSong({ name: 'Gravação ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'),
+             dur: Math.max(...events.map(e => e.t)) + 0.3,
+             tracks: [{ name: 'Teclado', notes: events.filter(e => e.k === 'on').length, map: 'K', events }] });
+  lcdFlash('Gravação guardada: ' + fmtT(seq.song.dur));
+}
+function seqSave() {
+  if (!seq.song) { lcdFlash('Nada para salvar'); return; }
+  const evs = [];
+  seq.song.tracks.forEach(tr => { if (tr.map !== 'off') evs.push(...tr.events); });
+  if (!evs.length) { lcdFlash('Todas as faixas estão desligadas'); return; }
+  const bytes = writeMidi(evs, seq.song.name);
+  const blob = new Blob([bytes], { type: 'audio/midi' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = seq.song.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() + '.mid';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  lcdFlash('Salvo: ' + a.download);
+}
+function seqOpenFile(file) {
+  if (!file) return;
+  if (file.size > 3 * 1024 * 1024) { lcdFlash('Arquivo grande demais (máx. 3 MB)'); return; }
+  const r = new FileReader();
+  r.onload = () => {
+    try { loadSong(toSong(parseMidi(r.result), file.name.replace(/\.(mid|midi)$/i, ''))); lcdFlash('Aberto: ' + file.name); }
+    catch (e) { lcdFlash('Erro: ' + e.message); }
+  };
+  r.onerror = () => lcdFlash('Não consegui ler o arquivo');
+  r.readAsArrayBuffer(file);
+}
+function seqDemo() {
+  const A = PRESETS.find(p => p.id === 'org-crunch'), B = PRESETS.find(p => p.id === 'mg-sub');
+  saveCur();
+  parts[0] = partFromPreset(A); parts[0].init = true;
+  parts[1] = partFromPreset(B); parts[1].init = true;
+  pushPart(1); pushPart(0); send('part:' + curPart);
+  if (modeIdx === 0) setMode(1, true);
+  curPart = 0; send('part:0'); showPartInUI(0); lcdSummary();
+  loadSong(buildDemo());
+  seqPlay();
+}
+$('sq-play').addEventListener('click', seqPlay);
+$('sq-stop').addEventListener('click', () => seqStop(false));
+$('sq-rec').addEventListener('click', () => { if (seq.state === 'rec') seqRecStop(); else seqRecStart(); });
+$('sq-open').addEventListener('click', () => $('sq-file').click());
+$('sq-file').addEventListener('change', e => { seqOpenFile(e.target.files[0]); e.target.value = ''; });
+$('sq-save').addEventListener('click', seqSave);
+$('sq-demo').addEventListener('click', seqDemo);
+$('sq-loop').addEventListener('click', () => { seq.loop = !seq.loop; seqUI(); });
+$('tp-').addEventListener('click', () => { const p = seqPos(); seq.tempo = Math.max(0.25, Math.round((seq.tempo - 0.05) * 100) / 100); if (seq.state === 'play') { seq.m0 = p; seq.p0 = performance.now(); } seqUI(); });
+$('tp+').addEventListener('click', () => { const p = seqPos(); seq.tempo = Math.min(2, Math.round((seq.tempo + 0.05) * 100) / 100); if (seq.state === 'play') { seq.m0 = p; seq.p0 = performance.now(); } seqUI(); });
+$('sq-bar').addEventListener('pointerdown', e => { const r = $('sq-bar').getBoundingClientRect(); seqSeek((e.clientX - r.left) / r.width); });
+seqUI();
 
 function pushAll() {
   send('mode:' + modeIdx); send('split:' + splitNote);

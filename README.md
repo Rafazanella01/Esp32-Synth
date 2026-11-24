@@ -12,18 +12,94 @@ ESP32-S3 + DAC I2S, controlado por página web (painel de equipamento dos anos 7
 | Piano por USB host | Não feito. |
 | Hardware | Nada testado no ESP32 ainda. |
 
-## Ouvir o som agora (sem o ESP32)
+## Como rodar o painel
+
+Hoje o painel roda **no computador**, com o som saindo pelo navegador. É assim que você ouve e
+ajusta os instrumentos enquanto o firmware do ESP32 não recebe o motor novo.
+
+### Requisitos
+
+- Python 3 (ou Node, veja a alternativa abaixo).
+- Chrome ou Edge para ter o piano por USB (Web MIDI). Firefox e Safari tocam o painel, mas sem
+  Web MIDI; use o teclado da tela ou o do computador.
+- Com Python 3 não precisa instalar nada nem ter internet.
+
+### Passo a passo
+
+1. Abra um terminal na pasta do projeto e suba um servidor local para a pasta `preview/`:
+
+   ```bash
+   cd preview
+   python3 -m http.server 8766 --bind 127.0.0.1
+   ```
+
+   Sem Python, com Node: `npx serve -l 8766 preview` (baixa o pacote `serve` na primeira vez, então precisa de internet só nessa vez).
+
+2. Abra no navegador: `http://localhost:8766/index.html`
+
+   Não abra o `index.html` com duplo clique (`file://`): o navegador bloqueia o motor de áudio
+   (AudioWorklet) fora de `http://` ou `https://`.
+
+3. **Toque numa tecla da tela** (ou aperte uma tecla do computador) para ligar o áudio. O
+   navegador só libera som depois de um gesto seu. A lâmpada **Áudio** acende e os vúmetros mexem.
+
+4. Escolha um programa em **Programas** e toque.
+
+### Tocar com o CDP-160S
+
+1. Ligue o piano ao computador com o cabo USB-B (porta *USB to Host* do piano) e deixe-o ligado.
+2. Abra o painel no **Chrome** e aceite o pedido de acesso MIDI, se aparecer.
+3. A lâmpada **MIDI** pisca ao tocar, e o visor mostra "Piano MIDI conectado".
+4. Velocity funciona em todos os instrumentos (a curva é ajustável no painel Performance).
+   O pedal sustain funciona no piano elétrico; o órgão, o clavinet e o Moog ignoram o pedal,
+   como os originais.
+
+Se o piano não aparecer: feche outros programas que usem o MIDI (DAW, Chrome em outra aba),
+desligue e ligue o cabo e recarregue a página. Em Linux, `aconnect -l` lista os dispositivos MIDI.
+
+### Teclado do computador
+
+`A W S E D F T G Y H U J K` tocam uma oitava a partir da nota mostrada ao lado dos botões `−` e `+`.
+
+### Controles
+
+| Onde | O que faz |
+|---|---|
+| **Programas** | 17 presets (Hammond, Clavinet, Piano elétrico, Moog). Escolher um troca o instrumento. |
+| **Memórias** | `Gravar` e depois `M1` a `M8` guarda o som atual. `M1` a `M8` sozinho chama. Ficam no navegador (`localStorage`), por aparelho. |
+| Painel do instrumento | Drawbars e percussão (órgão), captador e wah (clavinet), tine e bark (piano), filtro e envelopes (Moog). Arraste um knob na vertical; duplo clique volta ao valor do preset. |
+| **Efeitos** | Drive, Leslie (botão troca lenta/rápida), phaser, chorus, eco de fita, reverb, volume. |
+| **Performance** | Roda de pitch (±2 semitons, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, `Panic`. |
+| Visor | Mostra o programa e, por 1,4 s, o valor do knob que você mexe. |
+
+### Se você mudar a interface
+
+O arquivo que se edita é `src/ui.h`. A página `preview/index.html` é gerada dele: o trecho entre
+`R"HTML(` e `)HTML"`, com uma linha `<script src="shim.js"></script>` antes do primeiro `<script>`.
+Para gerar de novo, na pasta do projeto:
 
 ```bash
-cd preview && python3 -m http.server 8766 --bind 127.0.0.1
+awk '/R"HTML\(/{sub(/.*R"HTML\(/,"");f=1} /\)HTML";/{f=0} f' src/ui.h | sed 's|<script>|<script src="shim.js"></script>\n<script>|' > preview/index.html
 ```
 
-Abra `http://localhost:8766/index.html` e toque numa tecla da tela (liga o áudio).
-No Chrome, com o CDP-160S ligado por USB no computador, o piano toca o motor direto (Web MIDI:
-velocity, pedal sustain no Rhodes).
+Depois recarregue a página (Ctrl+F5). Se mexer em `preview/engine.js`, só recarregue.
 
-`preview/index.html` é gerado de `src/ui.h` (trecho entre `R"HTML(` e `)HTML"` mais a linha
-`<script src="shim.js">`). Se mudar a interface, gere de novo.
+### Problemas comuns
+
+| Sintoma | Causa e solução |
+|---|---|
+| Tela aparece mas não sai som | Falta o primeiro toque. Toque numa tecla da tela. A lâmpada **Áudio** tem que acender. |
+| "desconectado" / lâmpada Link apagada | O servidor da etapa 1 não está rodando. |
+| Piano toca mas sem som | Clique na página uma vez (o navegador exige gesto) e toque de novo. |
+| Mudou `engine.js` e nada mudou | Cache. Recarregue com Ctrl+F5. |
+| Notas muito altas ou baixas demais | Troque a oitava com `−` e `+`, ou veja a transposição em **Performance**. |
+
+### No ESP32
+
+Ainda **não funciona com o motor novo**. O `src/main.cpp` tem o motor antigo e entende só parte do
+protocolo (veja abaixo). Gravar o firmware e abrir `http://192.168.4.1` (Wi-Fi `SynthCDP`, senha
+`synth1234`) mostra a mesma página, mas só `on`/`off` e alguns parâmetros fazem efeito, com o som
+do motor antigo. A porta do motor novo para C++ é a próxima etapa.
 
 ## O que tem
 

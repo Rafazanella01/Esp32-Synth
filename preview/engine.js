@@ -18,8 +18,13 @@ const P = {
   perc: 0, percharm: 0, percfast: 1, kclick: 0.3,
   tine: 0.5, bark: 0.5, rdecay: 0.5, trem: 0.3, trate: 0.4,
   osc2: 0.5, osc2mix: 0.8, sub: 0.5, fenv: 0.5, fdecay: 0.4, fsus: 0.2, glide: 0, mono: 1,
-  drive: 0, leslie: 0, lfast: 0, reverb: 0.15, trim: 1
+  drive: 0, leslie: 0, lfast: 0, reverb: 0.15, trim: 1,
+  phaser: 0, phrate: 0.3, chorus: 0, delay: 0, dtime: 0.4, dfb: 0.3,
+  bend: 0.5, mod: 0, vcurve: 0.5
 };
+let transpose = 0;
+const tmap = new Map();
+let vphase = 0;
 let engine = ENG.clav;
 let sustainDown = false;
 let rng = 22222;
@@ -146,7 +151,7 @@ function startMoog(v, note, velN, retrigger) {
 }
 
 function voiceOn(note, vel) {
-  const velN = vel / 127;
+  const velN = Math.pow(vel / 127, Math.pow(2, (0.5 - P.vcurve) * 2));
   if (engine === ENG.moog && P.mono > 0.5) {
     const i0 = held.indexOf(note);
     if (i0 >= 0) held.splice(i0, 1);
@@ -200,6 +205,12 @@ const les = {
   hornBuf: new Float32Array(2048), drumBuf: new Float32Array(2048), w: 0
 };
 const trm = { ph: 0 };
+const phs = { z: [0, 0, 0, 0], y: 0, ph: 0 };
+const cho = { l: new Float32Array(4096), r: new Float32Array(4096), i: 0, ph: 0 };
+const ech = {
+  l: new Float32Array(Math.ceil(1.0 * SR)), r: new Float32Array(Math.ceil(1.0 * SR)),
+  i: 0, dt: 0.3 * SR, lpl: 0, lpr: 0, ph: 0
+};
 
 function makeReverb() {
   const k = SR / 44100;
@@ -277,6 +288,10 @@ function renderBlock(outL, outR, N) {
   const orgAtk = 1 / (0.004 * SR), orgRel = 1 / (0.025 * SR);
   const kclick = P.kclick * 0.5;
 
+  // pitch bend (±2 semitones) e vibrato da mod wheel; o clavinet não dobra (corda fixa)
+  vphase += 5.5 * N / SR; if (vphase >= 1) vphase -= 1;
+  const pb = Math.pow(2, ((P.bend - 0.5) * 4 + P.mod * 0.35 * Math.sin(TWO_PI * vphase)) / 12);
+
   const mix = new Float32Array(N);
 
   for (const v of voices) {
@@ -307,16 +322,17 @@ function renderBlock(outL, outR, N) {
     }
 
     if (v.eng === ENG.organ) {
+      const oinc = v.inc * pb;
       for (let n = 0; n < N; n++) {
-        v.ph += v.inc;
+        v.ph += oinc;
         if (v.ph >= 1) v.ph -= 1;
         let s = 0;
         for (let i = 0; i < 9; i++) {
           const w = wts[i];
-          if (w > 0 && ORG_K[i] * v.inc < 0.42) s += w * sinTurns(v.ph * ORG_K[i]);
+          if (w > 0 && ORG_K[i] * oinc < 0.42) s += w * sinTurns(v.ph * ORG_K[i]);
         }
         if (v.perc > 0.0005) {
-          if (percK * v.inc * 2 < 0.42) s += v.perc * 0.9 * sinTurns(v.ph * percK);
+          if (percK * oinc * 2 < 0.42) s += v.perc * 0.9 * sinTurns(v.ph * percK);
           v.perc *= percCoef;
         }
         if (v.kclk > 0.001) { s += frand() * v.kclk * kclick; v.kclk *= clkCoef; }
@@ -330,8 +346,9 @@ function renderBlock(outL, outR, N) {
     if (v.eng === ENG.rhodes) {
       const dampC = rel ? Math.pow(0.001, 1 / (0.14 * SR)) : 1;
       const amp = 0.35 + 0.65 * v.vel;
+      const rinc = v.inc * pb;
       for (let n = 0; n < N; n++) {
-        v.ph += v.inc;
+        v.ph += rinc;
         if (v.ph >= 1) v.ph -= 1;
         const body = sinTurns(v.ph + v.i1 * v.envM * sinTurns(v.ph));
         const tine = v.tineAmp > 0 ? v.tineAmp * v.envT * sinTurns(v.ph + v.i2 * v.envT * sinTurns(v.ph * 14)) : 0;
@@ -347,7 +364,7 @@ function renderBlock(outL, outR, N) {
       const kt = Math.pow(v.ft / 261.63, 0.4);
       for (let n = 0; n < N; n++) {
         v.f += (v.ft - v.f) * glideC;
-        const inc1 = v.f / SR, inc2 = inc1 * det, inc3 = inc1 * 0.5;
+        const inc1 = v.f * pb / SR, inc2 = inc1 * det, inc3 = inc1 * 0.5;
         v.p1 += inc1; if (v.p1 >= 1) v.p1 -= 1;
         v.p2 += inc2; if (v.p2 >= 1) v.p2 -= 1;
         v.p3 += inc3; if (v.p3 >= 1) v.p3 -= 1;
@@ -404,6 +421,23 @@ function renderBlock(outL, outR, N) {
   const rvFb = 0.74 + 0.1 * P.reverb;
   const target = P.volume * P.trim;
 
+  const phMix = P.phaser;
+  phs.ph += (0.1 + 5 * P.phrate) * N / SR; if (phs.ph >= 1) phs.ph -= 1;
+  const phTan = Math.tan(Math.PI * 300 * Math.pow(10, 0.5 + 0.5 * Math.sin(TWO_PI * phs.ph)) / SR);
+  const phA = (1 - phTan) / (1 + phTan);
+
+  const chMix = P.chorus;
+  const chInc = 0.7 / SR;
+  const chBase = 0.014 * SR, chDepth = 0.004 * SR;
+
+  const ecMix = P.delay * 0.7;
+  const ecFb = P.dfb * 0.85;
+  const ecTarget = 0.08 * Math.pow(8.75, P.dtime) * SR;
+  const ecLpC = 1 - Math.exp(-TWO_PI * 3500 / SR);
+  const ecLen = ech.l.length;
+
+  let sumL = 0, sumR = 0;
+
   for (let n = 0; n < N; n++) {
     let m = mix[n];
 
@@ -430,6 +464,17 @@ function renderBlock(outL, outR, N) {
       drv.lp1 += cabC * (y - drv.lp1);
       drv.lp2 += cabC * (drv.lp1 - drv.lp2);
       m = drv.lp2 * comp;
+    }
+
+    if (phMix > 0.01) {
+      let x = m + 0.55 * phs.y;
+      for (let i = 0; i < 4; i++) {
+        const y = phA * x + phs.z[i];
+        phs.z[i] = x - phA * y;
+        x = y;
+      }
+      phs.y = x;
+      m = m * (1 - 0.5 * phMix) + x * 0.5 * phMix;
     }
 
     let L = m, R = m;
@@ -459,15 +504,43 @@ function renderBlock(outL, outR, N) {
       R *= 1 - P.trem * 0.5 * (1 - s);
     }
 
+    if (chMix > 0.01) {
+      cho.ph += chInc; if (cho.ph >= 1) cho.ph -= 1;
+      cho.l[cho.i] = L; cho.r[cho.i] = R;
+      const dl = readBuf(cho.l, cho.i, chBase + chDepth * Math.sin(TWO_PI * cho.ph));
+      const dr = readBuf(cho.r, cho.i, chBase + chDepth * Math.sin(TWO_PI * cho.ph + 2.4));
+      cho.i = (cho.i + 1) & 4095;
+      L = L * (1 - 0.35 * chMix) + 0.75 * chMix * dl;
+      R = R * (1 - 0.35 * chMix) + 0.75 * chMix * dr;
+    }
+
+    if (ecMix > 0.005) {
+      ech.dt += (ecTarget - ech.dt) * 0.0004;
+      ech.ph += 0.6 / SR; if (ech.ph >= 1) ech.ph -= 1;
+      const wow = 1 + 0.0025 * Math.sin(TWO_PI * ech.ph);
+      const inp = 0.5 * (L + R);
+      const eL = readBuf(ech.l, ech.i, ech.dt * wow);
+      const eR = readBuf(ech.r, ech.i, ech.dt * wow * 1.12);
+      ech.lpl += ecLpC * (eL - ech.lpl);
+      ech.lpr += ecLpC * (eR - ech.lpr);
+      ech.l[ech.i] = inp + ech.lpr * ecFb;      // realimentação cruzada: ping-pong leve
+      ech.r[ech.i] = inp + ech.lpl * ecFb;
+      ech.i = (ech.i + 1) % ecLen;
+      L += eL * ecMix; R += eR * ecMix;
+    }
+
     if (rvMix > 0.001) {
       const w = reverbTick(0.5 * (L + R), rvFb, 0.4) * rvMix;
       L += w; R += w;
     }
 
     gainS.v += (target - gainS.v) * 0.002;
-    outL[n] = Math.tanh(L * gainS.v * 1.4);
-    outR[n] = Math.tanh(R * gainS.v * 1.4);
+    const oL = Math.tanh(L * gainS.v * 1.4), oR = Math.tanh(R * gainS.v * 1.4);
+    outL[n] = oL;
+    outR[n] = oR;
+    sumL += oL * oL; sumR += oR * oR;
   }
+  return [Math.sqrt(sumL / N), Math.sqrt(sumR / N)];
 }
 
 class SynthProcessor extends AudioWorkletProcessor {
@@ -480,15 +553,28 @@ class SynthProcessor extends AudioWorkletProcessor {
         else if (m.name in P) P[m.name] = Math.min(1, Math.max(0, m.v));
       } else if (m.t === 'e') {
         if (m.name in ENG) engine = ENG[m.name];
-      } else if (m.t === 'on') voiceOn(m.n, m.v);
-      else if (m.t === 'off') voiceOff(m.n);
-      else if (m.t === 'sus') setSustain(!!m.v);
+      } else if (m.t === 'on') {
+        const n = Math.min(127, Math.max(0, m.n + transpose));
+        tmap.set(m.n, n);
+        voiceOn(n, m.v);
+      } else if (m.t === 'off') {
+        const n = tmap.has(m.n) ? tmap.get(m.n) : m.n;
+        tmap.delete(m.n);
+        voiceOff(n);
+      } else if (m.t === 'sus') setSustain(!!m.v);
+      else if (m.t === 'tr') transpose = Math.max(-24, Math.min(24, m.v | 0));
+      else if (m.t === 'panic') {
+        for (const v of voices) { v.stage = IDLE; v.held = false; }
+        held.length = 0; tmap.clear(); setSustain(false);
+      }
     };
+    this.blocks = 0;
   }
   process(inputs, outputs) {
     const ch = outputs[0];
     const N = ch[0].length;
-    renderBlock(ch[0], ch[1] || ch[0], N);
+    const lv = renderBlock(ch[0], ch[1] || ch[0], N);
+    if (++this.blocks % 4 === 0) this.port.postMessage({ t: 'lv', l: lv[0], r: lv[1] });
     return true;
   }
 }

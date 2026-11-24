@@ -147,6 +147,9 @@
   .key.down { background:linear-gradient(180deg,#d8ccaa,#c4b88f); }
   .key.blk.down { background:linear-gradient(180deg,#2a2a2a,#000); }
 
+  .key.split { box-shadow: inset 3px 0 0 var(--red), 0 2px 3px rgba(0,0,0,.45); }
+  .key.blk.split { box-shadow: inset 3px 0 0 var(--red), 0 3px 4px rgba(0,0,0,.7); }
+
   @media (max-width:640px) {
     .deck { grid-template-columns:1fr; } .vus { justify-content:center; } .cab { padding:0 8px 14px; } .face { padding:10px 8px 2px; }
     .dbars { gap:3px; } .db { width:34px; } .logo b { font-size:17px; }
@@ -171,7 +174,19 @@
   <div class="vus"><div class="vu" id="vuL"></div><div class="vu" id="vuR"></div></div>
 </div>
 
-<div class="pnl"><h2>Programas</h2><div id="presets"></div></div>
+<div class="pnl"><h2>Teclado e partes</h2>
+  <div class="perf" style="justify-content:flex-start">
+    <div class="seg"><div class="rowsw" id="modes" style="margin:0">
+      <button class="sw"><i class="lamp"></i>Normal</button><button class="sw"><i class="lamp"></i>Camada</button><button class="sw"><i class="lamp"></i>Dividido</button>
+    </div><label>Modo do teclado</label></div>
+    <div class="seg" id="splitRow" style="display:none"><div class="segbox"><button class="sw dk" id="sp-">−</button><div class="segd" id="splitd">C4</div><button class="sw dk" id="sp+">+</button></div><label>Ponto de divisão</label></div>
+    <div class="seg"><div class="rowsw" id="partTabs" style="margin:0">
+      <button class="sw dk on"><i class="lamp"></i>Parte A</button><button class="sw dk"><i class="lamp"></i>Parte B</button>
+    </div><label>Editando</label></div>
+  </div>
+</div>
+
+<div class="pnl"><h2 id="presetsTitle">Programas</h2><div id="presets"></div></div>
 
 <div class="pnl"><h2>Memórias</h2>
   <div class="rowsw" style="margin-top:0;align-items:center" id="mem"></div>
@@ -330,7 +345,8 @@ const setters = {};
 const label = {};
 const fmts = {};
 let ws = null, lastSend = {};
-let curEng = 'clav', curTrim = 1, curName = '', curId = '', curBase = Object.assign({}, DEF);
+let modeIdx = 0, splitNote = 60, curPart = 0, curBase = Object.assign({}, DEF);
+const parts = [null, null];
 
 function send(msg) { if (ws && ws.readyState === 1) ws.send(msg); }
 function $(id) { return document.getElementById(id); }
@@ -476,27 +492,88 @@ function showEngine(eng) {
   for (const d of DB) if (setters[d[0]]) setters[d[0]](vals[d[0]]);
 }
 
-function applyState(st, name, line2, desc, id) {
-  curEng = st.eng; curTrim = st.trim; curName = name; curId = id || ''; curBase = {};
-  send('e:' + st.eng);
-  for (const k in DEF) {
-    const v = st.p[k] !== undefined ? st.p[k] : DEF[k];
-    curBase[k] = v; vals[k] = v;
-    if (setters[k]) setters[k](v);
-    send('p:' + k + ':' + v.toFixed(4));
-  }
-  send('p:trim:' + st.trim);
-  showEngine(st.eng);
-  lcdBase = line2;
-  lcd(name, line2, desc);
-  document.querySelectorAll('.pk[data-id]').forEach(b => b.classList.toggle('sel', b.dataset.id === curId));
-}
+const NN = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+function noteName(n) { return NN[n % 12] + (Math.floor(n / 12) - 1); }
+function pickDef(src) { const o = {}; for (const k in DEF) o[k] = src[k]; return o; }
 function presetState(pr) {
   const p = {};
   for (const k in DEF) p[k] = pr.p[k] !== undefined ? pr.p[k] : DEF[k];
   return { eng: pr.eng, trim: pr.trim, p };
 }
-function applyPreset(pr) { applyState(presetState(pr), pr.name, ENGNAME[pr.eng], pr.desc, pr.id); }
+function partFromPreset(pr) {
+  const st = presetState(pr);
+  return { eng: st.eng, trim: st.trim, name: pr.name, id: pr.id, desc: pr.desc, vals: st.p, base: Object.assign({}, st.p), init: false };
+}
+function partFromMem(m) {
+  const v = Object.assign({}, DEF, m.vals);
+  return { eng: m.eng, trim: m.trim, name: m.name || 'Memória', id: '', desc: 'Ajustes gravados por você.', vals: v, base: Object.assign({}, v), init: true };
+}
+function pushPart(i) {
+  const pt = parts[i];
+  send('part:' + i);
+  send('e:' + pt.eng);
+  for (const k in DEF) send('p:' + k + ':' + pt.vals[k].toFixed(4));
+  send('p:trim:' + pt.trim);
+}
+function showPartInUI(i) {
+  const pt = parts[i];
+  for (const k in DEF) { vals[k] = pt.vals[k]; if (setters[k]) setters[k](vals[k]); }
+  curBase = pt.base;
+  showEngine(pt.eng);
+  document.querySelectorAll('.pk[data-id]').forEach(b => b.classList.toggle('sel', b.dataset.id === pt.id));
+  $('presetsTitle').textContent = modeIdx === 0 ? 'Programas' : 'Programas · editando a parte ' + (i ? 'B' : 'A');
+  document.querySelectorAll('#partTabs .sw').forEach((b, j) => b.classList.toggle('on', j === i));
+}
+function saveCur() { parts[curPart].vals = pickDef(vals); }
+function lcdSummary() {
+  const a = parts[0], b = parts[1], cur = parts[curPart];
+  if (modeIdx === 0) { lcdBase = ENGNAME[a.eng]; lcd(a.name, lcdBase, a.desc); }
+  else if (modeIdx === 1) { lcdBase = 'B · ' + b.name; lcd('A · ' + a.name, lcdBase, 'Camada: as duas partes tocam juntas. ' + cur.desc); }
+  else {
+    lcdBase = 'B · ' + b.name + ' · de ' + noteName(splitNote);
+    lcd('A · ' + a.name + ' · até ' + noteName(splitNote - 1), lcdBase, 'Dividido: grave na parte A, agudo na B. ' + cur.desc);
+  }
+}
+function selectPart(i) {
+  saveCur(); curPart = i;
+  send('part:' + i);
+  showPartInUI(i);
+  lcdSummary();
+}
+function applyPreset(pr) {
+  parts[curPart] = partFromPreset(pr);
+  parts[curPart].init = true;
+  pushPart(curPart);
+  showPartInUI(curPart);
+  lcdSummary();
+}
+const MODES = ['Normal', 'Camada', 'Dividido'];
+function refreshZone() {
+  document.querySelectorAll('#modes .sw').forEach((b, j) => b.classList.toggle('on', j === modeIdx));
+  $('splitRow').style.display = modeIdx === 2 ? '' : 'none';
+  $('splitd').textContent = noteName(splitNote);
+  const tb = document.querySelectorAll('#partTabs .sw')[1];
+  tb.style.opacity = modeIdx === 0 ? 0.35 : 1; tb.disabled = modeIdx === 0;
+  buildKeys();
+}
+function setMode(m, quiet) {
+  saveCur();
+  modeIdx = m;
+  if (m !== 0 && !parts[1].init) {
+    const alt = parts[0].eng === 'rhodes' ? PRESETS.find(p => p.id === 'org-gospel') : PRESETS.find(p => p.id === 'rh-suave');
+    parts[1] = partFromPreset(alt); parts[1].init = true;
+    pushPart(1); send('part:' + curPart);
+  }
+  send('mode:' + m);
+  if (m === 0 && curPart === 1) { curPart = 0; send('part:0'); }
+  refreshZone(); showPartInUI(curPart); lcdSummary();
+  if (!quiet) lcdFlash('Teclado: ' + MODES[m]);
+}
+function setSplit(n) {
+  splitNote = Math.max(36, Math.min(96, n));
+  send('split:' + splitNote);
+  refreshZone(); lcdSummary();
+}
 
 (function buildPresets() {
   const host = $('presets');
@@ -519,11 +596,23 @@ function applyPreset(pr) { applyState(presetState(pr), pr.name, ENGNAME[pr.eng],
   });
 })();
 
-const SLOT_KEY = 'espsynth.slots.v1';
+const SLOT_KEY = 'espsynth.slots.v2';
 function loadSlots() { try { return JSON.parse(localStorage.getItem(SLOT_KEY)) || []; } catch (e) { return []; } }
 function saveSlots(a) { try { localStorage.setItem(SLOT_KEY, JSON.stringify(a)); return true; } catch (e) { return false; } }
 let storeArmed = false;
 const memBtns = [];
+function snapshot() {
+  saveCur();
+  const cut = p => ({ eng: p.eng, trim: p.trim, name: p.name, vals: p.vals });
+  return { mode: modeIdx, split: splitNote, parts: [cut(parts[0]), cut(parts[1])] };
+}
+function restore(c) {
+  parts[0] = partFromMem(c.parts[0]); parts[1] = partFromMem(c.parts[1]);
+  modeIdx = c.mode; splitNote = c.split; curPart = 0;
+  send('mode:' + modeIdx); send('split:' + splitNote);
+  pushPart(1); pushPart(0);
+  refreshZone(); showPartInUI(0); lcdSummary();
+}
 (function buildMem() {
   const host = $('mem');
   const store = document.createElement('button');
@@ -534,7 +623,6 @@ const memBtns = [];
     store.classList.toggle('on', storeArmed);
     lcdFlash(storeArmed ? 'Escolha a memória' : 'Gravação cancelada');
   });
-  const slots = loadSlots();
   const refresh = () => { const s = loadSlots(); memBtns.forEach((b, i) => b.classList.toggle('sel', !!s[i])); };
   for (let i = 0; i < 8; i++) {
     const b = document.createElement('button');
@@ -544,11 +632,12 @@ const memBtns = [];
     b.addEventListener('click', () => {
       const s = loadSlots();
       if (storeArmed) {
-        s[i] = { eng: curEng, trim: curTrim, name: curName, p: Object.fromEntries(Object.keys(DEF).map(k => [k, vals[k]])) };
+        s[i] = snapshot();
         lcdFlash(saveSlots(s) ? 'Memória ' + (i + 1) + ' gravada' : 'Sem espaço para gravar');
         storeArmed = false; store.classList.remove('on'); refresh();
       } else if (s[i]) {
-        applyState(s[i], s[i].name || 'Memória ' + (i + 1), 'Memória ' + (i + 1), 'Ajustes gravados por você.', '');
+        restore(s[i]);
+        lcdFlash('Memória ' + (i + 1));
       } else lcdFlash('Memória ' + (i + 1) + ' vazia');
     });
   }
@@ -605,7 +694,7 @@ function buildKeys() {
   $('octl').textContent = 'C' + (Math.floor(kbBase / 12) - 1) + ' a C' + (Math.floor(kbBase / 12) + 1);
   for (let n = kbBase; n < kbBase + 25; n++) {
     const k = document.createElement('div');
-    k.className = 'key' + (isBlack(n) ? ' blk' : '');
+    k.className = 'key' + (isBlack(n) ? ' blk' : '') + (modeIdx === 2 && n === splitNote ? ' split' : '');
     k.dataset.n = n;
     k.addEventListener('pointerdown', e => { e.preventDefault(); k.setPointerCapture(e.pointerId); k.classList.add('down'); noteOn(n); });
     const off = () => { if (k.classList.contains('down')) { k.classList.remove('down'); noteOff(n); } };
@@ -649,13 +738,26 @@ function onMsg(e) {
   }
 }
 
+function pushAll() {
+  send('mode:' + modeIdx); send('split:' + splitNote);
+  pushPart(1); pushPart(0);
+  send('part:' + curPart);
+  if (trVal) send('tr:' + trVal);
+}
 function connect() {
   ws = new WebSocket('ws://' + location.hostname + ':81/');
-  ws.onopen = () => { lamp('lpLink', true); applyPreset(PRESETS.find(p => p.id === curId) || PRESETS[6]); };
+  ws.onopen = () => { lamp('lpLink', true); pushAll(); };
   ws.onmessage = onMsg;
   ws.onclose = () => { lamp('lpLink', false); lamp('lpAudio', false); setTimeout(connect, 1000); };
 }
-applyPreset(PRESETS[6]);
+document.querySelectorAll('#modes .sw').forEach((b, j) => b.addEventListener('click', () => setMode(j)));
+document.querySelectorAll('#partTabs .sw').forEach((b, j) => b.addEventListener('click', () => { if (!b.disabled && j !== curPart) selectPart(j); }));
+$('sp-').addEventListener('click', () => setSplit(splitNote - 1));
+$('sp+').addEventListener('click', () => setSplit(splitNote + 1));
+
+parts[0] = partFromPreset(PRESETS[6]); parts[0].init = true;
+parts[1] = partFromPreset(PRESETS.find(p => p.id === 'rh-suave'));
+showPartInUI(0); refreshZone(); lcdSummary();
 connect();
 </script>
 </body>

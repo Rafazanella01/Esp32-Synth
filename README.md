@@ -65,8 +65,9 @@ desligue e ligue o cabo e recarregue a página. Em Linux, `aconnect -l` lista os
 
 | Onde | O que faz |
 |---|---|
-| **Programas** | 17 presets (Hammond, Clavinet, Piano elétrico, Moog). Escolher um troca o instrumento. |
-| **Memórias** | `Gravar` e depois `M1` a `M8` guarda o som atual. `M1` a `M8` sozinho chama. Ficam no navegador (`localStorage`), por aparelho. |
+| **Teclado e partes** | Escolha *Normal*, *Camada* ou *Dividido*. Em *Dividido*, `−` e `+` movem o ponto de divisão (a divisão vale pela tecla que você aperta, mesmo com transposição). `Parte A` e `Parte B` escolhem qual parte os programas e knobs estão editando. Ao ligar a Camada ou o Divisão pela primeira vez, a parte B começa com um programa sugerido (Piano elétrico, ou Órgão se a A já for piano). |
+| **Programas** | 17 presets (Hammond, Clavinet, Piano elétrico, Moog). Escolher um troca o instrumento da parte que está sendo editada. |
+| **Memórias** | `Gravar` e depois `M1` a `M8` guarda **tudo**: modo, ponto de divisão e as duas partes. `M1` a `M8` sozinho chama. Ficam no navegador (`localStorage`), por aparelho. Memórias gravadas na versão anterior (só uma parte) não são lidas. |
 | Painel do instrumento | Drawbars e percussão (órgão), captador e wah (clavinet), tine e bark (piano), filtro e envelopes (Moog). Arraste um knob na vertical; duplo clique volta ao valor do preset. |
 | **Efeitos** | Drive, Leslie (botão troca lenta/rápida), phaser, chorus, eco de fita, reverb, volume. |
 | **Performance** | Roda de pitch (±2 semitons, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, `Panic`. |
@@ -105,6 +106,7 @@ do motor antigo. A porta do motor novo para C++ é a próxima etapa.
 
 - **Instrumentos:** Hammond (9 drawbars, percussão, key click), Clavinet (corda, captador, wah), piano elétrico FM (tine, bark), Moog (ladder 4 polos, glide, mono).
 - **Efeitos:** drive de válvula, Leslie (rotor lento/rápido), phaser, chorus, eco de fita, reverb, tremolo estéreo.
+- **Duas partes (A e B) e modos de teclado:** *Normal* (só A), *Camada* (A e B tocam juntas) e *Dividido* (A abaixo do ponto de divisão, B a partir dele; a marca vermelha no teclado da tela mostra o ponto). Cada parte tem instrumento, ajustes e efeitos próprios; só o reverb é compartilhado.
 - **Performance** (o CDP-160S não tem): roda de pitch (±2 st, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, panic.
 - **Memórias:** 8 posições suas, gravadas no navegador (`localStorage`). `GRAVAR` + `M1..M8` grava, `M1..M8` chama.
 - **Vúmetros e lâmpadas:** nível L/R, link, áudio, MIDI, pedal.
@@ -113,7 +115,9 @@ Os presets são aproximações do caráter de cada instrumento, não cópias de 
 
 ## Protocolo página <-> motor (o firmware precisa falar o mesmo)
 
-Página para o motor: `e:<instrumento>`, `p:<parâmetro>:<0..1>`, `on:<nota>:<vel>`, `off:<nota>`, `tr:<semitons>`, `panic`.
+Página para o motor: `part:<0|1>` escolhe a parte; `e:<instrumento>` e `p:<parâmetro>:<0..1>` valem para a parte escolhida
+(`bend`, `mod` e `vcurve` são globais); `mode:<0|1|2>` (normal, camada, dividido); `split:<nota>`;
+`on:<nota>:<vel>`, `off:<nota>`, `tr:<semitons>`, `panic`.
 Motor para a página: `v:<nívelL>:<nívelR>` (vúmetro), `a:1` (atividade MIDI), `s:<0|1>` (pedal).
 
 ## Ligações do DAC (PCM5102A)

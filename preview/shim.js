@@ -1,6 +1,8 @@
 // Troca o WebSocket do ESP32 por um motor de áudio local (AudioWorklet), para ouvir o som no PC.
 // Fala o mesmo protocolo que o firmware vai falar:
-//   página -> motor:  e:<engine>  p:<param>:<0..1>  on:<nota>:<vel>  off:<nota>  tr:<semitons>  panic
+//   página -> motor:  part:<0|1>  e:<engine>  p:<param>:<0..1>  mode:<0|1|2>  split:<nota>
+//                     on:<nota>:<vel>  off:<nota>  tr:<semitons>  panic
+//                     (e: e p: valem para a parte escolhida por part:)
 //   motor -> página:  v:<nivelL>:<nivelR>  (vúmetro)   a:1 (atividade MIDI)   s:<0|1> (pedal)
 // Se o navegador tiver Web MIDI (Chrome) e o CDP-160S estiver ligado por USB, o piano toca o motor direto.
 (function () {
@@ -11,7 +13,7 @@
 
   function post(m) {
     if (node) node.port.postMessage(m);
-    else if (m.t === 'p' || m.t === 'e' || m.t === 'tr') queue.push(m);   // notas antes de ligar o áudio são descartadas
+    else if (['p', 'e', 'tr', 'part', 'mode', 'split'].includes(m.t)) queue.push(m);   // notas antes de ligar o áudio são descartadas
   }
 
   function start() {
@@ -46,6 +48,9 @@
       else if (a[0] === 'on') post({ t: 'on', n: parseInt(a[1]), v: parseInt(a[2]) });
       else if (a[0] === 'off') post({ t: 'off', n: parseInt(a[1]) });
       else if (a[0] === 'tr') post({ t: 'tr', v: parseInt(a[1]) });
+      else if (a[0] === 'part') post({ t: 'part', v: parseInt(a[1]) });
+      else if (a[0] === 'mode') post({ t: 'mode', v: parseInt(a[1]) });
+      else if (a[0] === 'split') post({ t: 'split', v: parseInt(a[1]) });
       else if (a[0] === 'panic') post({ t: 'panic' });
     }
   };

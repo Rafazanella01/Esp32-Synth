@@ -212,6 +212,8 @@
   <div class="rowsw" id="t-moog"></div>
 </div>
 
+<div id="pnl-strings" class="pnl eng"><h2>Cordas · conjunto de serras com chorus</h2><div class="knobs" id="k-strings"></div></div>
+
 <div class="pnl"><h2>Efeitos</h2>
   <div class="cap-lbl">Válvula e rotor</div>
   <div class="knobs" id="k-fx1" style="grid-template-columns:repeat(auto-fit,minmax(90px,140px))"></div>
@@ -222,6 +224,22 @@
   <div class="knobs" id="k-fx3" style="grid-template-columns:repeat(auto-fit,minmax(90px,140px))"></div>
   <div class="cap-lbl" style="margin-top:16px">Sala e saída</div>
   <div class="knobs" id="k-fx4" style="grid-template-columns:repeat(auto-fit,minmax(90px,140px))"></div>
+</div>
+
+<div class="pnl"><h2>Arpejador e metrônomo</h2>
+  <div class="rowsw" style="margin-top:0;align-items:center">
+    <button class="sw" id="ar-on"><i class="lamp"></i>Arpejador</button>
+    <button class="sw dk" id="ar-hold"><i class="lamp"></i>Hold</button>
+    <button class="sw dk" id="ar-met"><i class="lamp"></i>Metrônomo</button>
+  </div>
+  <div class="cap-lbl" style="margin:16px 0 8px">Padrão</div>
+  <div class="rowsw" id="ar-pat" style="margin-top:0"></div>
+  <div class="perf" style="margin-top:16px;justify-content:flex-start">
+    <div class="seg"><div class="segbox"><button class="sw dk" id="ar-bpm-">−</button><div class="segd" id="ar-bpmd">120</div><button class="sw dk" id="ar-bpm+">+</button></div><label>Andamento (BPM)</label></div>
+    <div class="seg"><div class="segbox"><button class="sw dk" id="ar-div-">−</button><div class="segd" id="ar-divd" style="min-width:104px;font-size:16px">1/16</div><button class="sw dk" id="ar-div+">+</button></div><label>Divisão</label></div>
+    <div class="seg"><div class="segbox"><button class="sw dk" id="ar-oct-">−</button><div class="segd" id="ar-octd">1</div><button class="sw dk" id="ar-oct+">+</button></div><label>Oitavas</label></div>
+    <div class="seg"><div class="segbox"><button class="sw dk" id="ar-gate-">−</button><div class="segd" id="ar-gated">60%</div><button class="sw dk" id="ar-gate+">+</button></div><label>Duração (gate)</label></div>
+  </div>
 </div>
 
 <div class="pnl"><h2>Sequenciador · arquivos MIDI</h2>
@@ -276,12 +294,14 @@ const DEF = {
   osc2:.5, osc2mix:.8, sub:.5, fenv:.5, fdecay:.4, fsus:.2, glide:0, mono:1,
   drive:0, leslie:0, lfast:0, reverb:.15,
   phaser:0, phrate:.3, chorus:0, delay:0, dtime:.4, dfb:.3,
-  vib:0, vibc:1, cphase:0
+  vib:0, vibc:1, cphase:0,
+  satk:.3, srel:.35, sbright:.5, sens:.5, svib:.3
 };
 const G_DP = 'Deep Purple · estilo Jon Lord (Hammond C3 + Leslie + Marshall)';
 const G_SC = 'Stevie Wonder · Clavinet D6';
 const G_SR = 'Stevie Wonder · Fender Rhodes';
 const G_SM = 'Stevie Wonder · Moog';
+const G_ST = 'Cordas · conjunto estilo Solina (anos 70)';
 const PRESETS = [
   { id:'org-crunch', group:G_DP, eng:'organ', name:'Rock Crunch', trim:0.31,
     desc:'888 + Marshall no talo + Leslie rápida. Clima Highway Star / Burn.',
@@ -336,7 +356,20 @@ const PRESETS = [
     p:{ cutoff:.18, res:.15, fenv:.35, fdecay:.35, fsus:.3, osc2:.3, osc2mix:.3, sub:1, glide:.03, attack:0, decay:.4, sustain:.85, release:.2, reverb:0 } },
   { id:'mg-lead', group:G_SM, eng:'moog', name:'Lead Portamento', trim:0.67,
     desc:'Solo com glide entre as notas, ressonância e eco de fita.',
-    p:{ cutoff:.55, res:.38, fenv:.35, fdecay:.5, fsus:.5, osc2:.6, osc2mix:1, sub:.3, glide:.45, attack:.02, decay:.5, sustain:.85, release:.25, drive:.1, delay:.3, dtime:.42, dfb:.35, reverb:.2 } }
+    p:{ cutoff:.55, res:.38, fenv:.35, fdecay:.5, fsus:.5, osc2:.6, osc2mix:1, sub:.3, glide:.45, attack:.02, decay:.5, sustain:.85, release:.25, drive:.1, delay:.3, dtime:.42, dfb:.35, reverb:.2 } },
+
+  { id:'st-solina', group:G_ST, eng:'strings', name:'Solina Ensemble', trim:0.53,
+    desc:'Serras com detune, chorus de conjunto e vibrato lento. O pad de cordas dos anos 70.',
+    p:{ satk:.35, srel:.4, sbright:.55, sens:.6, svib:.3, chorus:.85, reverb:.3 } },
+  { id:'st-lento', group:G_ST, eng:'strings', name:'Cordas Lentas', trim:0.62,
+    desc:'Ataque e release longos, mais escuro. Camada de fundo sob outro som.',
+    p:{ satk:.62, srel:.62, sbright:.38, sens:.5, svib:.2, chorus:.7, reverb:.45 } },
+  { id:'st-phaser', group:G_ST, eng:'strings', name:'Cordas Phaser', trim:0.39,
+    desc:'Phaser girando devagar sobre o conjunto. Clima de disco e rock progressivo.',
+    p:{ satk:.4, srel:.45, sbright:.6, sens:.55, svib:.25, phaser:.6, phrate:.2, chorus:.5, reverb:.3 } },
+  { id:'st-curtas', group:G_ST, eng:'strings', name:'Cordas Curtas', trim:0.52,
+    desc:'Ataque rápido e release curto, mais brilho. Acordes marcados.',
+    p:{ satk:.08, srel:.18, sbright:.68, sens:.55, svib:.15, chorus:.7, reverb:.2 } }
 ];
 /*PRESETS_END*/
 const PERF = { bend:.5, mod:0, vcurve:.5 };
@@ -571,7 +604,7 @@ const LIBRARY = [
 /*MIDI_END*/
 
 
-const ENGNAME = { organ:'Órgão de tonewheels', clav:'Clavinet', rhodes:'Piano elétrico', moog:'Sintetizador analógico' };
+const ENGNAME = { organ:'Órgão de tonewheels', clav:'Clavinet', rhodes:'Piano elétrico', moog:'Sintetizador analógico', strings:'Cordas de conjunto' };
 const fmtPct = v => Math.round(v*100)+'%';
 const KNOBS = {
   clav: ['al', [
@@ -586,6 +619,9 @@ const KNOBS = {
     ['osc2','Detune',v=>Math.round(v*25)+'c'], ['osc2mix','Osc 2',fmtPct], ['sub','Sub',fmtPct], ['glide','Glide',fmtPct],
     ['attack','Attack',v=>(0.002*Math.pow(1000,v)).toFixed(3)+'s'], ['decay','Decay',v=>(0.01*Math.pow(300,v)).toFixed(2)+'s'],
     ['sustain','Sustain',fmtPct], ['release','Release',v=>(0.01*Math.pow(500,v)).toFixed(2)+'s'] ]],
+  strings: ['al', [
+    ['satk','Ataque',v=>(0.02*Math.pow(150,v)).toFixed(2)+'s'], ['srel','Release',v=>(0.05*Math.pow(60,v)).toFixed(2)+'s'],
+    ['sbright','Brilho',fmtPct], ['sens','Conjunto',v=>Math.round(v*16)+'c'], ['svib','Vibrato',fmtPct] ]],
   organ: ['al', [ ['kclick','Key click',fmtPct], ['vib','Scanner',fmtPct] ]],
   fx1: ['bk', [ ['drive','Drive',fmtPct], ['leslie','Leslie',fmtPct] ]],
   fx2: ['bk', [ ['phaser','Phaser',fmtPct], ['phrate','Vel. phaser',v=>(0.1+5*v).toFixed(1)+'Hz'], ['chorus','Chorus',fmtPct] ]],
@@ -887,6 +923,31 @@ function restore(c) {
     lcdFlash(storeArmed ? 'Escolha a memória' : 'Gravação cancelada');
   });
   const refresh = () => { const s = loadSlots(); memBtns.forEach((b, i) => b.classList.toggle('sel', !!s[i])); };
+  const ex = document.createElement('button'); ex.className = 'sw'; ex.textContent = 'Exportar'; ex.title = 'Salva as 8 memórias num arquivo';
+  const im = document.createElement('button'); im.className = 'sw'; im.textContent = 'Importar'; im.title = 'Carrega memórias de um arquivo exportado';
+  const fi = document.createElement('input'); fi.type = 'file'; fi.accept = '.json,application/json'; fi.style.display = 'none';
+  host.appendChild(ex); host.appendChild(im); host.appendChild(fi);
+  ex.addEventListener('click', () => {
+    const data = JSON.stringify({ format: 'espsynth-memorias', v: 2, slots: loadSlots() });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+    a.download = 'memorias-synth.json'; document.body.appendChild(a); a.click(); a.remove();
+    lcdFlash('Memórias exportadas');
+  });
+  im.addEventListener('click', () => fi.click());
+  fi.addEventListener('change', () => {
+    const f = fi.files[0]; fi.value = '';
+    if (!f) return;
+    f.text().then(t => {
+      const d = JSON.parse(t);
+      const okPart = p => p && ENGNAME[p.eng] && typeof p.trim === 'number' && p.vals && typeof p.vals === 'object';
+      if (!d || d.format !== 'espsynth-memorias' || !Array.isArray(d.slots)) throw new Error('formato');
+      const slots = d.slots.slice(0, 8).map(c => (c && Array.isArray(c.parts) && c.parts.length === 2 && okPart(c.parts[0]) && okPart(c.parts[1]) && typeof c.mode === 'number' && typeof c.split === 'number') ? c : null);
+      if (!saveSlots(slots)) throw new Error('espaço');
+      refresh();
+      lcdFlash('Memórias importadas: ' + slots.filter(Boolean).length + ' de 8');
+    }).catch(() => lcdFlash('Arquivo de memórias inválido'));
+  });
   for (let i = 0; i < 8; i++) {
     const b = document.createElement('button');
     b.className = 'pk dark'; b.style.minWidth = '62px'; b.style.flex = '1';
@@ -1002,6 +1063,46 @@ function onMsg(e) {
     if (a[1] === 'midi') { midiOn = a.slice(2).join(':').length > 0; lcdFlash(midiOn ? 'Piano MIDI conectado' : 'Sem piano MIDI'); }
   }
 }
+
+// ----- arpejador e metrônomo (o relógio roda no motor de áudio) -----
+const ARP_PATS = ['Sobe', 'Desce', 'Sobe e desce', 'Aleatório', 'Ordem tocada', 'Acorde'];
+const ARP_DIVS = [[1, '1/4'], [2, '1/8'], [3, '1/8 tripleto'], [4, '1/16'], [6, '1/16 tripleto'], [8, '1/32']];
+const arpS = { on: false, hold: false, met: false, pat: 0, oct: 1, di: 3, gate: 0.6, bpm: 120 };
+function sendArp() {
+  send('tempo:' + arpS.bpm);
+  send('arp:' + (arpS.on ? 1 : 0) + ':' + arpS.pat + ':' + arpS.oct + ':' + ARP_DIVS[arpS.di][0] + ':' + arpS.gate.toFixed(2) + ':' + (arpS.hold ? 1 : 0));
+  send('met:' + (arpS.met ? 1 : 0) + ':0.6');
+}
+function arpUI() {
+  $('ar-on').classList.toggle('on', arpS.on);
+  $('ar-hold').classList.toggle('on', arpS.hold);
+  $('ar-met').classList.toggle('on', arpS.met);
+  document.querySelectorAll('#ar-pat .sw').forEach((b, j) => b.classList.toggle('on', j === arpS.pat));
+  $('ar-bpmd').textContent = arpS.bpm;
+  $('ar-divd').textContent = ARP_DIVS[arpS.di][1];
+  $('ar-octd').textContent = arpS.oct;
+  $('ar-gated').textContent = Math.round(arpS.gate * 100) + '%';
+}
+function arpChange(msg) { arpUI(); sendArp(); if (msg) lcdFlash(msg); }
+(function buildArp() {
+  ARP_PATS.forEach((n, j) => {
+    const b = document.createElement('button'); b.className = 'sw dk'; b.innerHTML = '<i class="lamp"></i>' + n;
+    b.addEventListener('click', () => { arpS.pat = j; arpChange('Arpejo: ' + n); });
+    $('ar-pat').appendChild(b);
+  });
+  $('ar-on').addEventListener('click', () => { arpS.on = !arpS.on; arpChange(arpS.on ? 'Arpejador ligado' : 'Arpejador desligado'); });
+  $('ar-hold').addEventListener('click', () => { arpS.hold = !arpS.hold; arpChange(arpS.hold ? 'Hold ligado: o arpejo continua ao soltar' : 'Hold desligado'); });
+  $('ar-met').addEventListener('click', () => { arpS.met = !arpS.met; arpChange(arpS.met ? 'Metrônomo ligado' : 'Metrônomo desligado'); });
+  $('ar-bpm-').addEventListener('click', () => { arpS.bpm = Math.max(40, arpS.bpm - 1); arpChange(); });
+  $('ar-bpm+').addEventListener('click', () => { arpS.bpm = Math.min(240, arpS.bpm + 1); arpChange(); });
+  $('ar-div-').addEventListener('click', () => { arpS.di = Math.max(0, arpS.di - 1); arpChange(); });
+  $('ar-div+').addEventListener('click', () => { arpS.di = Math.min(ARP_DIVS.length - 1, arpS.di + 1); arpChange(); });
+  $('ar-oct-').addEventListener('click', () => { arpS.oct = Math.max(1, arpS.oct - 1); arpChange(); });
+  $('ar-oct+').addEventListener('click', () => { arpS.oct = Math.min(4, arpS.oct + 1); arpChange(); });
+  $('ar-gate-').addEventListener('click', () => { arpS.gate = Math.max(0.1, +(arpS.gate - 0.1).toFixed(2)); arpChange(); });
+  $('ar-gate+').addEventListener('click', () => { arpS.gate = Math.min(1, +(arpS.gate + 0.1).toFixed(2)); arpChange(); });
+  arpUI();
+})();
 
 // ----- sequenciador: tocar, gravar, abrir e salvar .mid -----
 let audioReady = false;
@@ -1215,6 +1316,7 @@ function pushAll() {
   pushPart(1); pushPart(0);
   send('part:' + curPart);
   if (trVal) send('tr:' + trVal);
+  sendArp();
 }
 function connect() {
   ws = new WebSocket('ws://' + location.hostname + ':81/');

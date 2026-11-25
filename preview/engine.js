@@ -1,7 +1,8 @@
 // Motor de áudio do sintetizador (referência testável em JavaScript).
 // Duas partes (A e B), cada uma com instrumento, parâmetros e efeitos próprios.
 // Modos de teclado: 0 normal (só A), 1 camada (A + B juntas), 2 dividido (A abaixo do ponto, B a partir dele).
-// Instrumentos: clav (Clavinet), organ (órgão de tonewheels), rhodes (piano elétrico), moog (baixo/lead).
+// Instrumentos: clav (Clavinet), organ (órgão de tonewheels), rhodes (piano elétrico), moog (baixo/lead), strings (cordas tipo Solina).
+// Arpejador (arp:), metrônomo (met:) e andamento (tempo:) são globais e rodam aqui dentro, sem depender da rede.
 // Efeitos por parte: wah (clav), drive, Leslie, phaser, tremolo (rhodes), chorus, eco. Reverb é compartilhado.
 // O firmware (src/main.cpp) ainda NÃO tem este motor: precisa ser portado.
 
@@ -12,7 +13,7 @@ const LINE_LEN = 2048;
 const LINE_MASK = LINE_LEN - 1;
 const MAXN = 128;
 
-const ENG = { clav: 0, organ: 1, rhodes: 2, moog: 3 };
+const ENG = { clav: 0, organ: 1, rhodes: 2, moog: 3, strings: 4 };
 
 const PDEF = {
   cutoff: 0.5, res: 0.2, attack: 0.02, decay: 0.4, sustain: 0.7, release: 0.3, volume: 0.7,
@@ -23,7 +24,8 @@ const PDEF = {
   osc2: 0.5, osc2mix: 0.8, sub: 0.5, fenv: 0.5, fdecay: 0.4, fsus: 0.2, glide: 0, mono: 1,
   drive: 0, leslie: 0, lfast: 0, reverb: 0.15, trim: 1,
   phaser: 0, phrate: 0.3, chorus: 0, delay: 0, dtime: 0.4, dfb: 0.3,
-  vib: 0, vibc: 1, cphase: 0
+  vib: 0, vibc: 1, cphase: 0,
+  satk: 0.3, srel: 0.35, sbright: 0.5, sens: 0.5, svib: 0.3
 };
 const G = { bend: 0.5, mod: 0, vcurve: 0.5 };      // globais de performance
 const GLOBAL_NAMES = new Set(['bend', 'mod', 'vcurve']);
@@ -228,6 +230,14 @@ function startRhodes(v, note, velN) {
   v.th = 0.04 * velN; v.thlp = 0;
 }
 
+function startStrings(v, note) {
+  v.ft = noteFreq(note);
+  v.p1 = frand() * 0.5 + 0.5; v.p2 = frand() * 0.5 + 0.5; v.p3 = frand() * 0.5 + 0.5;
+  v.ph = frand() * 0.5 + 0.5;            // fase do vibrato (cada voz tem a sua)
+  v.y1 = v.y2 = 0; v.y3 = 0;
+  v.env = 0; v.es = 0;
+}
+
 function startMoog(v, note, retrigger) {
   v.ft = noteFreq(note);
   if (!retrigger) { v.f = v.ft; v.p1 = 0; v.p2 = 0.37; v.p3 = 0; v.y1 = v.y2 = v.y3 = v.y4 = 0; v.w1 = v.w2 = v.w3 = v.w4 = 0; }
@@ -257,6 +267,7 @@ function voiceOn(pi, note, vel) {
   if (engine === ENG.clav) startClav(v, note, velN);
   else if (engine === ENG.organ) startOrgan(v, note);
   else if (engine === ENG.rhodes) startRhodes(v, note, velN);
+  else if (engine === ENG.strings) startStrings(v, note);
   else startMoog(v, note, false);
 }
 
@@ -283,6 +294,10 @@ function voiceOff(note, only = -1) {
 
 function setSustain(down) {
   sustainDown = down;
+  if (!down && arp.on && !arp.hold) {
+    arpList = arpList.filter(x => arpDown.has(x.n));
+    if (!arpList.length) arpRelease();
+  }
   if (!down) for (const v of voices) if (v.stage === ON && v.held) releaseVoice(v);
 }
 
@@ -302,6 +317,88 @@ function applySched(ev) {
       voiceOff(n);
     } else voiceOff(ev.n, ev.part);
   } else if (ev.k === 'sus') setSustain(!!ev.v);
+}
+
+// ---------- arpejador e metrônomo (relógio no próprio motor: sem jitter de rede) ----------
+let bpm = 120;
+const arp = { on: false, pat: 0, oct: 1, div: 4, gate: 0.6, hold: false };
+let arpList = [];            // notas do arpejo: { n, v } na ordem em que foram tocadas
+const arpDown = new Set();   // teclas fisicamente seguradas
+let arpStep = 0, arpCount = 0, arpGateLeft = 0;
+let arpSound = [];           // notas (já transpostas) soando neste passo
+const met = { on: false, count: 0, beat: 0, env: 0, ph: 0, inc: 0, vol: 0.5 };
+
+function arpStepSamples() { return SR * 60 / (bpm * arp.div); }
+
+function arpRelease() {
+  for (const n of arpSound) voiceOff(n);
+  arpSound = [];
+  arpGateLeft = 0;
+}
+
+function arpSeq() {
+  const base = arp.pat === 4 ? arpList.slice() : arpList.slice().sort((a, b) => a.n - b.n);
+  const out = [];
+  for (let o = 0; o < arp.oct; o++) for (const x of base) out.push({ n: x.n + 12 * o, v: x.v, key: x.n });
+  return out;
+}
+
+function arpFire() {
+  arpRelease();
+  const seq = arpSeq();
+  const L = seq.length;
+  if (!L) return;
+  let pick;
+  if (arp.pat === 5) pick = seq;                                     // acorde: todas juntas
+  else {
+    let k;
+    if (arp.pat === 1) k = L - 1 - (arpStep % L);
+    else if (arp.pat === 2) { const per = Math.max(1, 2 * L - 2); const q = arpStep % per; k = q < L ? q : per - q; }
+    else if (arp.pat === 3) k = Math.min(L - 1, Math.floor((frand() + 1) * 0.5 * L));
+    else k = arpStep % L;
+    pick = [seq[k]];
+  }
+  arpStep++;
+  for (const x of pick) {
+    const n = Math.min(127, Math.max(0, x.n + transpose));
+    arpSound.push(n);
+    routeOn(n, x.v, x.key);
+  }
+  arpGateLeft = Math.max(1, arpStepSamples() * arp.gate);
+}
+
+function arpStop() {
+  arpRelease();
+  arpList = []; arpDown.clear(); arpStep = 0; arpCount = 0;
+}
+
+function arpPress(n, v) {
+  if ((arp.hold || sustainDown) && arpDown.size === 0) arpList = [];
+  const wasEmpty = arpList.length === 0;
+  arpDown.add(n);
+  const i = arpList.findIndex(x => x.n === n);
+  if (i >= 0) arpList[i].v = v; else arpList.push({ n, v });
+  if (wasEmpty) { arpStep = 0; arpCount = 0; }               // primeira nota toca já, sem esperar a grade
+}
+
+function arpOff(n) {
+  arpDown.delete(n);
+  if (arp.hold || sustainDown) return;
+  arpList = arpList.filter(x => x.n !== n);
+  if (!arpList.length) arpRelease();
+}
+
+function arpTick(N) {
+  if (!arp.on || !arpList.length) { arpCount = 0; return; }
+  if (arpSound.length) { arpGateLeft -= N; if (arpGateLeft <= 0) arpRelease(); }
+  arpCount -= N;
+  while (arpCount <= 0) { arpFire(); arpCount += arpStepSamples(); }
+}
+
+function setArp(on) {
+  if (on === arp.on) return;
+  arp.on = on;
+  if (!on) arpStop();
 }
 
 function routeOn(n, vel, key) {
@@ -340,6 +437,11 @@ function derive(part) {
   D.percK = P.percharm > 0.5 ? 6 : 4;
   D.percCoef = expCoef(P.percfast > 0.5 ? 0.12 : 0.5);
   D.kclick = P.kclick * 0.5;
+  D.sAtk = 1 / (0.02 * Math.pow(150, P.satk) * SR);
+  D.sRel = 1 - expCoef(0.05 * Math.pow(60, P.srel));
+  D.sDet = P.sens * 16;
+  D.sVib = P.svib * 14;
+  D.sBr = 700 * Math.pow(2, P.sbright * 4.6);
 }
 
 const clkCoef = expCoef(0.004);
@@ -417,6 +519,37 @@ function renderVoice(v, mix, D, N, pb) {
       v.e1 *= v.c1 * dampC; v.e2 *= v.c2 * dampC; v.e3 *= v.c3 * dampC;
     }
     if (v.e1 < 0.0003) v.stage = IDLE;
+    return;
+  }
+
+  if (v.eng === ENG.strings) {
+    // cordas tipo Solina: serras com detune (efeito de conjunto), vibrato lento, corte que segue a nota
+    const kt2 = Math.pow(v.ft / 261.63, 0.5);
+    let fc = D.sBr * kt2;
+    if (fc > 0.4 * SR) fc = 0.4 * SR;
+    const lpg = 1 - Math.exp(-TWO_PI * fc / SR);
+    const dA = Math.pow(2, D.sDet / 1200), dB = 1 / dA;
+    const vr = 5.3 / SR;
+    for (let n = 0; n < N; n++) {
+      v.ph += vr; if (v.ph >= 1) v.ph -= 1;
+      const vm = 1 + (D.sVib / 1200) * 0.6931 * sinTurns(v.ph) * (v.env < 1 ? v.env : 1);
+      const f0 = v.ft * pb * vm / SR;
+      const i1 = f0, i2 = f0 * dA, i3 = f0 * dB, i4 = f0 * 2.0007;
+      v.p1 += i1; if (v.p1 >= 1) v.p1 -= 1;
+      v.p2 += i2; if (v.p2 >= 1) v.p2 -= 1;
+      v.p3 += i3; if (v.p3 >= 1) v.p3 -= 1;
+      v.dr1 += i4; if (v.dr1 >= 1) v.dr1 -= 1;
+      const o1 = 2 * v.p1 - 1 - polyBlep(v.p1, i1);
+      const o2 = 2 * v.p2 - 1 - polyBlep(v.p2, i2);
+      const o3 = 2 * v.p3 - 1 - polyBlep(v.p3, i3);
+      const o4 = 2 * v.dr1 - 1 - polyBlep(v.dr1, i4);
+      const s = 0.3 * (o1 + o2 + o3) + 0.16 * o4;
+      v.y1 += lpg * (s - v.y1);
+      v.y2 += lpg * (v.y1 - v.y2);
+      if (rel) { v.env -= v.env * D.sRel; if (v.env < 0.0005) { v.stage = IDLE; v.env = 0; break; } }
+      else if (v.env < 1) { v.env += D.sAtk; if (v.env > 1) v.env = 1; }
+      mix[n] += v.y2 * v.env * (0.55 + 0.45 * v.vel) * 0.5;
+    }
     return;
   }
 
@@ -646,6 +779,11 @@ function renderBlock(outL, outR, N) {
       const w = reverbTick(rvIn, rvFb, 0.4) * 0.5;
       L += w; R += w;
     }
+    if (met.on) {
+      if (met.count <= 0) { met.count += SR * 60 / bpm; met.env = 1; met.ph = 0; met.inc = (met.beat % 4 === 0 ? 1500 : 1000) / SR; met.beat++; }
+      met.count--;
+      if (met.env > 0.0005) { met.ph += met.inc; if (met.ph >= 1) met.ph -= 1; const c = sinTurns(met.ph) * met.env * met.vol * 0.25; L += c; R += c; met.env *= 0.9988; }
+    }
     const oL = Math.tanh(L * 1.4), oR = Math.tanh(R * 1.4);
     outL[n] = oL; outR[n] = oR;
     sumL += oL * oL; sumR += oR * oR;
@@ -670,6 +808,17 @@ class SynthProcessor extends AudioWorkletProcessor {
       } else if (m.t === 'part') editPart = m.v ? 1 : 0;
       else if (m.t === 'mode') mode = Math.max(0, Math.min(2, m.v | 0));
       else if (m.t === 'split') splitNote = Math.max(0, Math.min(127, m.v | 0));
+      else if (m.t === 'arp') {
+        arp.pat = Math.max(0, Math.min(5, m.pat | 0)); arp.oct = Math.max(1, Math.min(4, m.oct | 0));
+        arp.div = Math.max(1, Math.min(8, m.div | 0)); arp.gate = Math.max(0.05, Math.min(1, m.gate));
+        const hold = !!m.hold;
+        if (arp.hold && !hold && arpDown.size === 0) { arpList = []; arpRelease(); }
+        arp.hold = hold;
+        setArp(!!m.on);
+      } else if (m.t === 'tempo') bpm = Math.max(30, Math.min(300, m.v));
+      else if (m.t === 'met') { met.on = !!m.on; met.vol = Math.max(0, Math.min(1, m.vol)); met.count = 0; met.beat = 0; }
+      else if (m.t === 'on' && arp.on) arpPress(m.n, m.v);
+      else if (m.t === 'off' && arp.on) arpOff(m.n);
       else if (m.t === 'on') {
         const n = Math.min(127, Math.max(0, m.n + transpose));
         tmap.set(m.n, n);
@@ -687,7 +836,7 @@ class SynthProcessor extends AudioWorkletProcessor {
       else if (m.t === 'tr') transpose = Math.max(-24, Math.min(24, m.v | 0));
       else if (m.t === 'panic') {
         for (const v of voices) { v.stage = IDLE; v.held = false; }
-        held[0].length = 0; held[1].length = 0; tmap.clear(); sched.length = 0; setSustain(false);
+        held[0].length = 0; held[1].length = 0; tmap.clear(); sched.length = 0; arpStop(); setSustain(false);
       }
     };
     this.blocks = 0;
@@ -696,6 +845,7 @@ class SynthProcessor extends AudioWorkletProcessor {
     const ch = outputs[0];
     const N = ch[0].length;
     while (sched.length && sched[0].at < currentFrame + N) applySched(sched.shift());
+    arpTick(N);
     const lv = renderBlock(ch[0], ch[1] || ch[0], N);
     if (++this.blocks % 4 === 0) this.port.postMessage({ t: 'lv', l: lv[0], r: lv[1] });
     return true;

@@ -67,8 +67,9 @@ desligue e ligue o cabo e recarregue a página. Em Linux, `aconnect -l` lista os
 |---|---|
 | **Sequenciador** | `Abrir .mid` carrega um arquivo; `Tocar`/`Pausar`/`Parar`; clique na barra para pular; `−`/`+` mudam o andamento (25% a 200%); `Repetir` faz laço; `Gravar` grava o que você toca (tela, teclado do computador ou piano) e `Salvar .mid` exporta. Cada faixa do arquivo pode ir para Teclado (segue o modo atual), Parte A, Parte B, A + B ou ficar desligada. |
 | **Teclado e partes** | Escolha *Normal*, *Camada* ou *Dividido*. Em *Dividido*, `−` e `+` movem o ponto de divisão (a divisão vale pela tecla que você aperta, mesmo com transposição). `Parte A` e `Parte B` escolhem qual parte os programas e knobs estão editando. Ao ligar a Camada ou o Divisão pela primeira vez, a parte B começa com um programa sugerido (Piano elétrico, ou Órgão se a A já for piano). |
-| **Programas** | 17 presets (Hammond, Clavinet, Piano elétrico, Moog). Escolher um troca o instrumento da parte que está sendo editada. |
-| **Memórias** | `Gravar` e depois `M1` a `M8` guarda **tudo**: modo, ponto de divisão e as duas partes. `M1` a `M8` sozinho chama. Ficam no navegador (`localStorage`), por aparelho. Memórias gravadas na versão anterior (só uma parte) não são lidas. |
+| **Programas** | 21 presets (Hammond, Clavinet, Piano elétrico, Moog, Cordas). Escolher um troca o instrumento da parte que está sendo editada. |
+| **Memórias** | `Gravar` e depois `M1` a `M8` guarda **tudo**: modo, ponto de divisão e as duas partes. `M1` a `M8` sozinho chama. Ficam no navegador (`localStorage`), por aparelho. Memórias gravadas na versão anterior (só uma parte) não são lidas. `Exportar` salva as 8 memórias num arquivo `.json` (backup, ou para levar a outro aparelho) e `Importar` carrega esse arquivo, substituindo as memórias atuais. |
+| **Arpejador e metrônomo** | `Arpejador` liga; toque um acorde e as notas saem uma a uma. Padrões: sobe, desce, sobe e desce, aleatório, ordem tocada e acorde. `Hold` mantém o arpejo ao soltar as teclas (o pedal sustain também segura). Ajuste andamento (BPM), divisão (1/4 a 1/32, com tripletos), oitavas (1 a 4) e duração das notas (gate). A primeira nota toca na hora, sem esperar a grade. O relógio roda dentro do motor de áudio, então não depende da rede. `Metrônomo` dá um clique no andamento (o primeiro tempo de cada quatro é mais agudo). |
 | Painel do instrumento | Drawbars e percussão (órgão), captador e wah (clavinet), tine e bark (piano), filtro e envelopes (Moog). Arraste um knob na vertical; duplo clique volta ao valor do preset. |
 | **Efeitos** | Drive, Leslie (botão troca lenta/rápida), phaser, chorus, eco de fita, reverb, volume. |
 | **Performance** | Roda de pitch (±2 semitons, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, `Panic`. |
@@ -118,12 +119,13 @@ do motor antigo. A porta do motor novo para C++ é a próxima etapa.
 
 ## O que tem
 
-- **Instrumentos:** Hammond (9 drawbars, percussão, key click), Clavinet (corda, captador, wah), piano elétrico FM (tine, bark), Moog (ladder 4 polos, glide, mono).
+- **Instrumentos:** Hammond (9 drawbars, percussão, key click), Clavinet (corda, captador, wah), piano elétrico FM (tine, bark), Moog (ladder 4 polos, glide, mono), cordas de conjunto estilo Solina (serras com detune, vibrato lento, ataque e release ajustáveis; o chorus de conjunto vem dos efeitos).
+- **Arpejador e metrônomo:** seis padrões, 1 a 4 oitavas, divisões de 1/4 a 1/32 com tripletos, hold, gate e andamento de 40 a 240 BPM.
 - **Efeitos:** drive de válvula, Leslie (rotor lento/rápido), phaser, chorus, eco de fita, reverb, tremolo estéreo.
 - **Duas partes (A e B) e modos de teclado:** *Normal* (só A), *Camada* (A e B tocam juntas) e *Dividido* (A abaixo do ponto de divisão, B a partir dele; a marca vermelha no teclado da tela mostra o ponto). Cada parte tem instrumento, ajustes e efeitos próprios; só o reverb é compartilhado.
 - **Sequenciador de arquivos MIDI:** abre e toca `.mid`, grava o que você toca e salva em `.mid`. Veja a seção abaixo.
 - **Performance** (o CDP-160S não tem): roda de pitch (±2 st, volta ao centro), roda de mod (vibrato), transposição ±12, curva de velocity, panic.
-- **Memórias:** 8 posições suas, gravadas no navegador (`localStorage`). `GRAVAR` + `M1..M8` grava, `M1..M8` chama.
+- **Memórias:** 8 posições suas, gravadas no navegador (`localStorage`). `GRAVAR` + `M1..M8` grava, `M1..M8` chama. `Exportar` e `Importar` fazem backup em arquivo.
 - **Vúmetros e lâmpadas:** nível L/R, link, áudio, MIDI, pedal.
 
 Os presets são aproximações do caráter de cada instrumento, não cópias de patches.
@@ -133,6 +135,7 @@ Os presets são aproximações do caráter de cada instrumento, não cópias de 
 Página para o motor: `part:<0|1>` escolhe a parte; `e:<instrumento>` e `p:<parâmetro>:<0..1>` valem para a parte escolhida
 (`bend`, `mod` e `vcurve` são globais); `mode:<0|1|2>` (normal, camada, dividido); `split:<nota>`;
 `on:<nota>:<vel>`, `off:<nota>`, `tr:<semitons>`, `panic`;
+arpejador e metrônomo (globais): `arp:<on>:<padrão 0-5>:<oitavas 1-4>:<divisão 1,2,3,4,6,8>:<gate 0-1>:<hold>`, `tempo:<bpm>`, `met:<on>:<volume 0-1>`;
 agendados (o último número é o atraso em ms a partir do recebimento): `son:<parte|-1>:<nota>:<vel>:<ms>`, `soff:<parte|-1>:<nota>:<ms>`, `ssus:<0|1>:<ms>`; `sclear` cancela os agendados (`-1` segue o modo do teclado).
 Motor para a página: `v:<nívelL>:<nívelR>` (vúmetro), `a:1` (atividade MIDI), `s:<0|1>` (pedal), `k:<nota>:<vel>` (tecla do piano; vel 0 = solta).
 
@@ -151,6 +154,7 @@ com testes offline; nenhum foi comparado com gravação do instrumento real.
   inharmonicidade própria por nota que não está modelada.
 - **Moog:** filtro ladder de 4 estágios com saturação (tanh) em cada estágio e sobreamostragem 2x (-30 dB/oitava medido, ressonância +12 dB),
   osciladores anti-aliasing com deriva lenta de até ±2,5 cents.
+- **Cordas:** três serras com detune (±0 a 16 cents) mais uma serra uma oitava acima, com anti-aliasing (polyBLEP), vibrato lento de 5,3 Hz com fase própria por voz, e filtro passa-baixa de dois polos cujo corte segue a nota. É um modelo do conjunto (ensemble) de órgão de cordas dos anos 70, sem os divisores de frequência do circuito original.
 - **Clavinet:** corda por Karplus-Strong com perdas do laço compensadas, captadores em fase ou fora de fase,
   baque do martelo e clique do abafador. Não modela o ruído mecânico do instrumento nem as chaves de timbre do D6.
 
